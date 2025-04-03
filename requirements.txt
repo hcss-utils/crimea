@@ -140,7 +140,7 @@ Jinja2==3.1.6
 jiter==0.8.0
 joblib==1.4.2
 jsbeautifier==1.15.4
-json5==3.0.0
+json5==0.11.0
 jsonargparse==3.13.1
 jsonpatch==1.33
 jsonpickle==4.0.5
