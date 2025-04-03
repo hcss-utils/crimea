@@ -190,7 +190,7 @@ matplotlib-inline==0.1.6
 mdurl==0.1.2
 mistral_common==1.5.1
 mistune==2.0.4
-mkl-service==2.4.0
+mkl-service==2.4.2
 mkl_fft==1.4.4
 mkl_random==1.2.3
 ml-dtypes==0.4.1
