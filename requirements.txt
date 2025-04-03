@@ -5,8 +5,8 @@ dash==3.0.2
 dash-bootstrap-components==2.0.0
 dash-cytoscape==1.0.2
 plotly==6.0.1
-networkx==3.1.1
-python-dateutil==2.9.0.post0
+networkx==3.1
+python-dateutil==2.9.0
 Flask==2.2.5
 
 # Dash extensions needed for Cytoscape
