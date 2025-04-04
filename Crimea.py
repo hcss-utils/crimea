@@ -1,12 +1,28 @@
+"""
+Crimea Annexation (2014) Interactive Dashboard - COMPLETE WORKING VERSION
+
+Complete, fully functional code that preserves all essential elements from the original working version
+while incorporating the beneficial modifications from the second version:
+- Full untruncated data lists
+- Tab 1: Cytoscape graph with node/edge type filters and full view options
+- Tab 2: Plotly timeline with add_shape fix and filterable DataTable
+- Tab 3: Plotly actor relationship graph with comprehensive error handling
+- Tab 4: Causal Cytoscape 'breadthfirst' graph for analysis
+- Comprehensive error handling throughout
+- All elements carefully preserved from the original working code
+"""
+
 import pandas as pd
 import numpy as np
 import json
 from datetime import datetime, date
 import re
 import dash
+import dash_mantine_components as dmc
+from dash import Dash, html
 from dash import dcc, html, dash_table
+from dash.dependencies import Input, Output, State, ALL
 import dash_bootstrap_components as dbc
-from dash.dependencies import Input, Output, State
 import plotly.express as px
 import plotly.graph_objects as go
 import networkx as nx
@@ -16,7 +32,10 @@ import traceback
 import uuid  # For Cytoscape element generation if needed
 
 # Load Cytoscape extensions - important for layouts
-cyto.load_extra_layouts()
+try:
+    cyto.load_extra_layouts()
+except Exception as e:
+    print(f"Warning: Could not load extra Cytoscape layouts: {e}")
 
 # Enable debug mode
 debug_mode = True
@@ -33,22 +52,34 @@ def parse_date(date_str):
         if range_match_simple:
             day_start, month, year = range_match_simple.groups()
             date_str = f"{day_start} {month} {year}"
-        # Complex range match if needed
+            if debug_mode: print(f"DEBUG (parse_date): Parsed simple range: '{original_date_str}' -> '{date_str}'")
+
+        # Complex range match: "22 Apr - 3 May 2014" -> use the first day
         range_match_complex = re.match(r"(\d{1,2}\s+\w{3})\s*-\s*\d{1,2}\s+\w{3}\s+(\d{4})", date_str)
         if range_match_complex:
             day_month_start, year = range_match_complex.groups()
             date_str = f"{day_month_start} {year}"
+            if debug_mode: print(f"DEBUG (parse_date): Parsed complex range: '{original_date_str}' -> '{date_str}'")
+
         formats_to_try = ["%d %b %Y"]
+        parsed_date = None
         for fmt in formats_to_try:
             try:
-                return datetime.strptime(date_str, fmt)
+                parsed_date = datetime.strptime(date_str, fmt)
+                # if debug_mode: print(f"DEBUG (parse_date): Successfully parsed '{date_str}' with format '{fmt}'")
+                return parsed_date # Success
             except ValueError:
-                continue
+                continue # Try next format
+
+        # Fallback if formats failed
         print(f"Warning: Could not parse date string '{original_date_str}' (processed as '{date_str}') with known formats.")
-        return datetime(2014, 2, 27)
+        return datetime(2014, 2, 27) # Default fallback
+
     except Exception as e:
         print(f"Error during date parsing for: '{original_date_str}', Processed str: '{date_str}'. Error: {e}")
-        return datetime(2014, 2, 27)
+        # traceback.print_exc() # Uncomment for full traceback if needed
+        return datetime(2014, 2, 27) # Default fallback
+
 
 # ------------------------------------------------------------------------------
 # FULL DATA LISTS
@@ -194,6 +225,24 @@ actors = [
     {"name": "Crimean gov't (Aksyonov)", "type": "Regional Government (De Facto)", "role": "The separatist government installed on 27 Feb.", "events": ["Crimean Parliament Votes to Secede and Join Russia"]},
     {"name": "Aleksei Chaly", "type": "Regional Leader (De Facto)", "role": "Elected as de facto mayor of Sevastopol.", "events": ["Pro-Russian Rally in Crimea; Parallel Authority in Sevastopol", "Crimea's 'Declaration of Independence'"]},
     {"name": "Barack Obama", "type": "Country (International Responder)", "role": "Imposed sanctions and led international opposition.", "events": ["UN Security Council Draft Resolution Vetoed by Russia", "Crimea Moves to Annexation; Western Sanctions Begin", "G7 Nations Suspend Russia from G8"]},
+    {"name": "Crimean Parliament", "type": "Regional Legislative Body", "role": "Autonomous Republic of Crimea legislature.", "events": ["Clashes at Crimean Parliament between Rival Rallies", "Armed Men Seize Crimean Parliament; New PM Installed", "Crimea Moves to Annexation; Western Sanctions Begin"]},
+    {"name": "Crimean Parliament & Sevastopol Council", "type": "Legislative Bodies (Joint)", "role": "Joint bodies issuing independence declaration.", "events": ["Crimea's 'Declaration of Independence'"]},
+    {"name": "United Nations Security Council (P5: Russia, US, UK, France, China)", "type": "International Body", "role": "UN body where Russia vetoed resolution.", "events": ["UN Security Council Draft Resolution Vetoed by Russia"]},
+    {"name": "Crimean de facto authorities", "type": "Regional Government (De Facto)", "role": "Authorities organizing the referendum.", "events": ["Crimean Referendum Held Under Occupation"]},
+    {"name": "Crimean voters", "type": "Group (Civil)", "role": "Participants in the disputed referendum.", "events": ["Crimean Referendum Held Under Occupation"]},
+    {"name": "USA", "type": "Country (International Responder)", "role": "Imposed sanctions.", "events": ["Crimea Moves to Annexation; Western Sanctions Begin"]},
+    {"name": "Russian Parliament", "type": "National Legislative Body", "role": "Ratified annexation treaty.", "events": ["Treaty of Accession: Russia Annexes Crimea"]},
+    {"name": "Russian State Duma & Federation Council", "type": "National Legislative Bodies", "role": "Both houses legalizing annexation.", "events": ["Annexation Legalized in Russian Law"]},
+    {"name": "G7 (USA, UK, France, Germany, Italy, Canada, Japan) & EU", "type": "International Grouping", "role": "Suspended Russia from G8.", "events": ["G7 Nations Suspend Russia from G8"]},
+    {"name": "UN General Assembly (193 member states)", "type": "International Body", "role": "Passed resolution deeming referendum invalid.", "events": ["UN General Assembly Deems Referendum Invalid"]},
+    {"name": "Ukraine (Parliament & Gov't)", "type": "National Government & Legislature", "role": "Declared Crimea occupied.", "events": ["Kyiv Declares Crimea 'Occupied Territory'"]},
+    {"name": "Crimean authorities", "type": "Regional Government (De Facto)", "role": "Authorities enforcing ban on Dzhemilev.", "events": ["Tatar Leader Barred; Standoff at Crimea Border"]},
+    {"name": "Crimean Tatar community", "type": "Ethnic/Cultural Group", "role": "Community protesting leader's ban.", "events": ["Tatar Leader Barred; Standoff at Crimea Border"]},
+    {"name": "Crimean Tatars (Mejlis)", "type": "Ethnic/Cultural Group", "role": "Community defying ban on commemoration.", "events": ["Defying Ban, Tatars Commemorate Deportation Anniversary"]},
+    {"name": "Sergey Aksyonov (Crimea PM)", "type": "Regional Leader (De Facto)", "role": "Issued ban on mass gatherings.", "events": ["Defying Ban, Tatars Commemorate Deportation Anniversary"]},
+    {"name": "Petro Poroshenko", "type": "Individual", "role": "President of Ukraine from 7 Jun 2014", "events": ["New Ukrainian President Elected, Vows to Reclaim Crimea"]},
+    {"name": "Ukrainian voters", "type": "Group (Civil)", "role": "Elected Poroshenko.", "events": ["New Ukrainian President Elected, Vows to Reclaim Crimea"]},
+    {"name": "Russian gov't", "type": "National Government", "role": "Government opposing Poroshenko's stance.", "events": ["New Ukrainian President Elected, Vows to Reclaim Crimea"]}
 ]
 
 individuals = [
@@ -232,7 +281,9 @@ causal_links = [
     {"source_event": "Defying Ban, Tatars Commemorate Deportation Anniversary", "target_event": "New Ukrainian President Elected, Vows to Reclaim Crimea", "relationship": "Policy Continuation", "description": "The continuing unrest influenced Ukraine's electoral choices."}
 ]
 
-# --- DataFrame conversions and timeline preparation ---
+# ------------------------------------------------------------------------------
+# DataFrame conversions and timeline preparation
+# ------------------------------------------------------------------------------
 events_df = pd.DataFrame(events)
 events_df['date_parsed'] = events_df['date'].apply(parse_date)
 events_df = events_df.sort_values('date_parsed').reset_index(drop=True)
@@ -246,6 +297,9 @@ individuals_df = pd.DataFrame(individuals)
 individuals_df['events'] = individuals_df['events'].apply(lambda x: x if isinstance(x, list) else [])
 causal_links_df = pd.DataFrame(causal_links)
 
+# ------------------------------------------------------------------------------
+# Node and edge definitions for visualization
+# ------------------------------------------------------------------------------
 # Define node colors by type
 node_types = { "Event": "#4285F4", "Actor": "#EA4335", "Country": "#FBBC05", "Organization": "#34A853", "Individual": "#8F44AD", "Location": "#F39C12", "Method": "#3498DB", "Outcome": "#E74C3C" }
 
@@ -335,6 +389,16 @@ for _, individual in individuals_df.iterrows():
 all_nodes = event_nodes + actor_nodes + individual_nodes
 all_edges = causal_edges + actor_event_edges + individual_event_edges
 
+# Define node type options for filter checklist dynamically
+unique_node_types = sorted(list(set(n['type'] for n in all_nodes)))
+node_type_options = [{'label': nt, 'value': nt} for nt in unique_node_types]
+
+# Manually define edge type options
+edge_type_options = [
+    {'label': 'Causal Links', 'value': 'causal'},
+    {'label': 'Participation Links', 'value': 'participation'}
+]
+
 # ------------------------------------------------------------------------------
 # DASH APPLICATION SETUP
 # ------------------------------------------------------------------------------
@@ -354,7 +418,12 @@ default_stylesheet = [
         'label': 'data(label)',
         'font-size': '10px',
         'width': 'mapData(size, 5, 30, 5, 30)', # Map node size data property to width
-        'height': 'mapData(size, 5, 30, 5, 30)' # Map node size data property to height
+        'height': 'mapData(size, 5, 30, 5, 30)', # Map node size data property to height
+        'text-valign': 'bottom',
+        'text-halign': 'center',
+        'text-margin-y': '6px',
+        'border-width': 1,
+        'border-color': '#555'
     }},
     # Node type specific styles
     {'selector': '.Event', 'style': {'background-color': node_types['Event'], 'shape': 'ellipse'}},
@@ -397,8 +466,7 @@ default_stylesheet = [
     }}
 ]
 
-
-def create_cytoscape_elements(view_option='full', search_text=""):
+def create_cytoscape_elements(view_option='full', search_text="", node_type_filters=None, edge_type_filters=None):
     """
     Generate Cytoscape elements based on the view option and search filter.
     Handles 'full', 'events', 'actors', 'russia', 'international', 'causal_only'.
@@ -406,6 +474,12 @@ def create_cytoscape_elements(view_option='full', search_text=""):
     if debug_mode:
         print(f"Creating Cytoscape elements with view_option={view_option}, search_text='{search_text}'")
 
+    # Set defaults if filters are None
+    if node_type_filters is None:
+        node_type_filters = unique_node_types
+    if edge_type_filters is None:
+        edge_type_filters = [opt['value'] for opt in edge_type_options]
+        
     # Determine initial set based on view_option
     filtered_nodes_data = []
     filtered_edges_data = []
@@ -506,6 +580,23 @@ def create_cytoscape_elements(view_option='full', search_text=""):
         filtered_edges_data = [edge for edge in filtered_edges_data if edge['source'] in node_ids_in_view and edge['target'] in node_ids_in_view]
         if debug_mode: print(f"Edges filtered by search: {original_edge_count} -> {len(filtered_edges_data)}")
 
+    # --- Apply Node Type filter ---
+    if node_type_filters and node_type_filters != unique_node_types:
+        original_node_count = len(filtered_nodes_data)
+        filtered_nodes_data = [node for node in filtered_nodes_data if node['type'] in node_type_filters]
+        if debug_mode: print(f"Nodes filtered by type: {original_node_count} -> {len(filtered_nodes_data)}")
+        # Update node IDs in view
+        node_ids_in_view = {node['id'] for node in filtered_nodes_data}
+        # Refilter edges
+        original_edge_count = len(filtered_edges_data)
+        filtered_edges_data = [edge for edge in filtered_edges_data if edge['source'] in node_ids_in_view and edge['target'] in node_ids_in_view]
+        if debug_mode: print(f"Edges refiltered after node type: {original_edge_count} -> {len(filtered_edges_data)}")
+
+    # --- Apply Edge Type filter ---
+    if edge_type_filters and len(edge_type_filters) < len(edge_type_options):
+        original_edge_count = len(filtered_edges_data)
+        filtered_edges_data = [edge for edge in filtered_edges_data if edge['type'] in edge_type_filters]
+        if debug_mode: print(f"Edges filtered by type: {original_edge_count} -> {len(filtered_edges_data)}")
 
     # --- Convert filtered nodes/edges to Cytoscape element format ---
     elements = []
@@ -804,13 +895,13 @@ def create_actor_relationships():
         fig = go.Figure(data=[edge_trace, node_trace],
                  layout=go.Layout(
                     title='Actor Relationships Network (Based on Shared Events)',
-                    title_font_size=16, # <<< CORRECTED PROPERTY NAME
+                    title_font_size=16,
                     showlegend=False,
                     hovermode='closest',
-                                         margin=dict(b=20, l=5, r=5, t=40),
-                                         xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-                                         yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-                                         height=700))
+                    margin=dict(b=20, l=5, r=5, t=40),
+                    xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+                    yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+                    height=700))
         return fig
     except Exception as e:
         if debug_mode:
@@ -851,6 +942,124 @@ def create_actors_table():
             traceback.print_exc()
         # Return empty dataframe with correct columns
         return pd.DataFrame(columns=['Name', 'Type', 'Role/Description', 'Events Involved In'])
+        
+# ------------------------------------------------------------------------------
+# DASH APP LAYOUT
+# ------------------------------------------------------------------------------
+app.layout = dbc.Container([
+    dbc.Row([
+        dbc.Col([
+            html.H1("Crimea Annexation (2014): Interactive Analysis",
+                    style={'textAlign': 'center', 'marginTop': '20px', 'marginBottom': '20px'}),
+            html.P("A comprehensive visualization based on the FARO ontology.",
+                   style={'textAlign': 'center', 'fontSize': '18px', 'marginBottom': '30px'})
+        ], width=12)
+    ]),
+    dbc.Tabs([
+        dbc.Tab(label="FARO Knowledge Graph", tab_id="tab-1", children=[
+            dbc.Row([
+                dbc.Col([
+                    html.H3("FARO Ontology Network (Cytoscape)", style={'textAlign': 'center', 'marginTop': '20px'}),
+                    html.P("Interactive network. Pan/zoom, hover nodes/edges, click nodes for subgraph.",
+                           style={'textAlign': 'center', 'marginBottom': '20px'})
+                ], width=12)
+            ]),
+            dbc.Row([
+                dbc.Col([
+                    html.Label("Select Layout:", style={'fontWeight': 'bold'}),
+                    dcc.Dropdown(
+                        id='cytoscape-layout-dropdown',
+                        options=[
+                            {'label': 'Cose (Force Directed)', 'value': 'cose'},
+                            {'label': 'Grid', 'value': 'grid'},
+                            {'label': 'Circle', 'value': 'circle'},
+                            {'label': 'Breadthfirst', 'value': 'breadthfirst'},
+                            {'label': 'Dagre (Hierarchical)', 'value': 'dagre'}
+                        ],
+                        value='cose',
+                        clearable=False
+                    )
+                ], width=6, md=3),
+                dbc.Col([
+                    html.Label("Filter Node Types:", style={'fontWeight': 'bold'}),
+                    dcc.Checklist(
+                        id='node-type-checklist',
+                        options=node_type_options,
+                        value=[opt['value'] for opt in node_type_options],
+                        inline=True
+                    )
+                ], width=6, md=3),
+                dbc.Col([
+                    html.Label("Filter Edge Types:", style={'fontWeight': 'bold'}),
+                    dcc.Checklist(
+                        id='edge-type-checklist',
+                        options=edge_type_options,
+                        value=[opt['value'] for opt in edge_type_options],
+                        inline=True
+                    )
+                ], width=6, md=3),
+                dbc.Col([
+                    html.Label("Search Nodes:", style={'fontWeight': 'bold'}),
+                    dcc.Input(id="cytoscape-search-input", type="text", placeholder="Filter nodes by label...", debounce=True, style={"width": "100%"})
+                ], width=6, md=2),
+                dbc.Col([
+                    html.Button("Reset/Refilter", id="reset-btn", n_clicks=0, className="btn btn-secondary w-100", style={"marginTop": "31px"})
+                ], width=12, md=1, className="mt-3 mt-md-0 d-flex align-items-end")
+            ], justify="center", style={'marginBottom': '20px'}),
+            dbc.Row([
+                dbc.Col([
+                    html.Div(id="cytoscape-loading-output", children="", style={'textAlign': 'center', 'marginBottom': '5px', 'fontStyle': 'italic', 'color': 'grey'}),
+                    dcc.Loading(id="loading-cytoscape", type="circle", children=[
+                        cyto.Cytoscape(
+                            id='cytoscape-faro-network',
+                            elements=create_cytoscape_elements('full'),
+                            layout={'name': 'cose', 'animate': False},
+                            style={'width': '100%', 'height': '750px', 'border': '1px solid #ddd', 'backgroundColor': '#f9f9f9'},
+                            stylesheet=default_stylesheet,
+                            minZoom=0.1,
+                            maxZoom=2.0
+                        )
+                    ], fullscreen=False)
+                ], width=12)
+            ]),
+            dbc.Row([
+                dbc.Col([
+                    html.H5("Hover Details:", style={'marginTop': '15px'}),
+                    html.Div(id='cytoscape-hover-output', style={'padding': '10px', 'border': '1px solid #eee', 'minHeight': '60px', 'fontSize': '14px'}, children="Hover over a node or edge.")
+                ], md=6),
+                dbc.Col([
+                    html.H5("Click Details:", style={'marginTop': '15px'}),
+                    html.Div(id='cytoscape-tapNodeData-output', style={'padding': '10px', 'border': '1px dashed #ccc', 'minHeight': '60px', 'fontSize': '14px', 'maxHeight': '200px', 'overflowY': 'auto'}, children="Click on a node to see subgraph info.")
+                ], md=6)
+            ]),
+            dbc.Row([
+                dbc.Col([
+                    html.Div([
+                        html.H5("Legend:", style={'marginTop': '15px'}),
+                        dbc.Row([
+                            dbc.Col([
+                                html.Div([html.Div(style={'backgroundColor': node_types["Event"], 'width': '18px', 'height': '18px', 'display': 'inline-block', 'marginRight': '5px', 'border': '1px solid #ccc', 'borderRadius': '50%'}), html.Span(" Event", style={'verticalAlign': 'middle'})], style={'marginBottom': '5px'}),
+                                html.Div([html.Div(style={'backgroundColor': node_types["Individual"], 'width': '18px', 'height': '18px', 'display': 'inline-block', 'marginRight': '5px', 'border': '1px solid #ccc', 'transform': 'rotate(45deg)'}), html.Span(" Individual", style={'verticalAlign': 'middle'})], style={'marginBottom': '5px'})
+                            ], width=6, sm=3),
+                            dbc.Col([
+                                html.Div([html.Div(style={'backgroundColor': node_types["Country"], 'width': '18px', 'height': '18px', 'display': 'inline-block', 'marginRight': '5px', 'border': '1px solid #ccc'}), html.Span(" Country", style={'verticalAlign': 'middle'})], style={'marginBottom': '5px'}),
+                                html.Div([html.Div(style={'backgroundColor': node_types["Organization"], 'width': '18px', 'height': '18px', 'display': 'inline-block', 'marginRight': '5px', 'border': '1px solid #ccc'}), html.Span(" Organization", style={'verticalAlign': 'middle'})], style={'marginBottom': '5px'})
+                            ], width=6, sm=3),
+                            dbc.Col([
+                                html.Div([html.Div(style={'backgroundColor': node_types["Actor"], 'width': '18px', 'height': '18px', 'display': 'inline-block', 'marginRight': '5px', 'border': '1px solid #ccc'}), html.Span(" Other Actor", style={'verticalAlign': 'middle'})], style={'marginBottom': '5px'})
+                            ], width=6, sm=3),
+                            dbc.Col([
+                                html.Div([html.Span(style={'borderTop': '2px solid #333', 'display': 'inline-block', 'width': '20px', 'marginRight': '5px'}), html.Span(" Causal Link", style={'verticalAlign': 'middle'})], style={'marginBottom': '5px'}),
+                                html.Div([html.Span(style={'borderTop': '1px dashed #999', 'display': 'inline-block', 'width': '20px', 'marginRight': '5px'}), html.Span(" Participation Link", style={'verticalAlign': 'middle'})], style={'marginBottom': '5px'})
+                            ], width=6, sm=3)
+                        ], justify="start")
+                    ], style={'marginTop': '10px', 'padding': '10px', 'border': '1px solid #ddd', 'backgroundColor': 'rgba(250, 250, 250, 0.9)', 'fontSize': '13px'})
+                ], width=12)
+            ])
+        ])
+    ])
+], fluid=True, style={'fontFamily': 'Arial, sans-serif'})
+
 
 # ------------------------------------------------------------------------------
 # DASH APP LAYOUT
@@ -891,14 +1100,32 @@ app.layout = dbc.Container([
                         value='cose',
                         clearable=False
                     )
-                ], width=6, md=4),
+                ], width=6, md=3),
+                dbc.Col([
+                    html.Label("Filter Node Types:", style={'fontWeight': 'bold'}),
+                    dcc.Checklist(
+                        id='node-type-checklist',
+                        options=node_type_options,
+                        value=[opt['value'] for opt in node_type_options],
+                        inline=True
+                    )
+                ], width=6, md=3),
+                dbc.Col([
+                    html.Label("Filter Edge Types:", style={'fontWeight': 'bold'}),
+                    dcc.Checklist(
+                        id='edge-type-checklist',
+                        options=edge_type_options,
+                        value=[opt['value'] for opt in edge_type_options],
+                        inline=True
+                    )
+                ], width=6, md=3),
                 dbc.Col([
                     html.Label("Search Nodes:", style={'fontWeight': 'bold'}),
                     dcc.Input(id="cytoscape-search-input", type="text", placeholder="Filter nodes by label...", debounce=True, style={"width": "100%"})
-                ], width=6, md=4),
+                ], width=6, md=2),
                 dbc.Col([
                     html.Button("Reset/Refilter", id="reset-btn", n_clicks=0, className="btn btn-secondary w-100", style={"marginTop": "31px"})
-                ], width=12, md=3, className="mt-3 mt-md-0 d-flex align-items-end")
+                ], width=12, md=1, className="mt-3 mt-md-0 d-flex align-items-end")
             ], justify="center", style={'marginBottom': '20px'}),
             # Cytoscape Graph Row
             dbc.Row([
@@ -973,14 +1200,20 @@ app.layout = dbc.Container([
                 ], width=12, md=6),
                 dbc.Col([
                     html.Label("Date Range:", style={'fontWeight': 'bold'}),
-                    dcc.DatePickerRange(
-                        id='date-range-picker',
-                        min_date_allowed=timeline_df['date_parsed'].min().date(),
-                        max_date_allowed=timeline_df['date_parsed'].max().date(),
-                        start_date=timeline_df['date_parsed'].min().date(),
-                        end_date=timeline_df['date_parsed'].max().date(),
-                        display_format='DD MMM YY'
-                    )
+                   dcc.DatePickerRange(
+                    id='date-range-picker',
+                    min_date_allowed=timeline_df['date_parsed'].min().date(),
+                    max_date_allowed=timeline_df['date_parsed'].max().date(),
+                    start_date=timeline_df['date_parsed'].min().date(),
+                    end_date=timeline_df['date_parsed'].max().date(),
+                    display_format='DD MMM YYYY',
+                    # show_month_dropdown=True,
+                    # show_year_dropdown=True,
+                    day_size=39,
+                    with_portal=True,
+                    reopen_calendar_on_clear=True,
+                    clearable=True
+                )
                 ], width=12, md=6)
             ], justify="center", style={'marginBottom': '20px'}),
             dbc.Row([
@@ -998,6 +1231,47 @@ app.layout = dbc.Container([
                         html.Div(id='event-details', children="Click on an event in the timeline above to see details.", style={'padding': '15px', 'border': '1px solid #eee', 'minHeight': '100px', 'marginTop':'10px'})
                     ])
                 ], width=12)
+            ]),
+            # Filterable Event Table
+            dbc.Row([
+                dbc.Col([
+                    html.H4("Filtered Event List", style={'marginTop': '30px'}),
+                    html.Div(id="timeline-table-loading-output", children="", style={'textAlign': 'center', 'marginBottom': '5px', 'fontStyle': 'italic', 'color': 'grey'}),
+                    dcc.Loading(id='loading-timeline-table', type='circle', children=[
+                        dash_table.DataTable(
+                            id='timeline-table',
+                            columns=[
+                                {"name": "Date", "id": "date_str"},
+                                {"name": "Title", "id": "title"},
+                                {"name": "Type", "id": "type"},
+                                {"name": "Location", "id": "location"},
+                                {"name": "Actors Involved", "id": "actors_str"},
+                            ],
+                            data=timeline_df[['date_str', 'title', 'type', 'location', 'actors_str']].to_dict('records'),
+                            style_table={'overflowX': 'auto'},
+                            style_header={'backgroundColor': 'rgb(230, 230, 230)', 'fontWeight': 'bold'},
+                            style_cell={
+                                'textAlign': 'left',
+                                'padding': '8px',
+                                'whiteSpace': 'normal',
+                                'height': 'auto',
+                                'fontSize': '13px'
+                            },
+                            style_cell_conditional=[
+                                {'if': {'column_id': 'date_str'}, 'width': '10%'},
+                                {'if': {'column_id': 'title'}, 'width': '30%'},
+                                {'if': {'column_id': 'type'}, 'width': '15%'},
+                                {'if': {'column_id': 'location'}, 'width': '15%'},
+                                {'if': {'column_id': 'actors_str'}, 'width': '30%'},
+                            ],
+                            page_size=10,
+                            filter_action="native",
+                            sort_action="native",
+                            sort_mode="multi",
+                            style_data_conditional=[{'if': {'row_index': 'odd'}, 'backgroundColor': 'rgb(248, 248, 248)'}]
+                        )
+                    ])
+                ], width=12, style={'marginBottom': '30px'})
             ])
         ]),
         # TAB 3: Actors and Roles
@@ -1128,22 +1402,48 @@ app.layout = dbc.Container([
                                         ])
                                     ])
                                 ], style={'marginBottom': '15px', 'padding': '10px', 'border': '1px solid #ddd', 'backgroundColor': '#f9f9f9'}),
+
                                 html.Div([
-                                    html.H5("Causal Network Visualization", style={'marginTop':'25px'}),
-                                    html.P("The graph below shows direct causal links between key events."),
-                                    dcc.Loading(id='loading-causal-cyto', type='circle', children=[
-                                        cyto.Cytoscape(
-                                            id='cytoscape-causal-graph',
-                                            elements=create_cytoscape_elements('causal_only'),
-                                            layout={'name': 'dagre', 'rankDir': 'LR', 'animate': True, 'spacingFactor': 1.2},
-                                            style={'width': '100%', 'height': '600px', 'border': '1px solid lightgrey'},
-                                            stylesheet=default_stylesheet
-                                        )
-                                    ])
+                                    html.H5("Causal Network Visualization", style={'marginTop': '25px'}),
+                                    html.P("This graph shows direct causal links between events. You can:"),
+                                    html.Ul([
+                                        html.Li("Pan: Click and drag the canvas"),
+                                        html.Li("Zoom: Use mouse scroll or trackpad"),
+                                        html.Li("Reset layout by clicking the button below")
+                                    ]),
+                                    html.Button("Reset Layout", id="reset-causal-layout", className="btn btn-outline-secondary", style={'marginBottom': '10px'}),
+
+                                    # ✅ CENTERING WRAPPER
+                                    html.Div([
+                                        dcc.Loading(id='loading-causal-cyto', type='circle', children=[
+                                            cyto.Cytoscape(
+                                                id='cytoscape-causal-graph',
+                                                elements=create_cytoscape_elements('causal_only'),
+                                                layout={
+                                                    'name': 'breadthfirst',
+                                                    'roots': '[id = "Ukraine Drops EU Deal; Protests Begin (Euromaidan)"]',
+                                                    'animate': False,
+                                                    'spacingFactor': 1.5,
+                                                    'grid': True
+                                                },
+                                                style={
+                                                    'maxWidth': '1000px',  # fixed width for centering
+                                                    'width': '100%',
+                                                    'margin': 'auto',
+                                                    'height': '600px',
+                                                    'border': '1px solid lightgrey',
+                                                    'backgroundColor': '#fafafa'
+                                                },
+                                                stylesheet=default_stylesheet
+                                            )
+                                        ])
+                                    ], style={'display': 'flex', 'justifyContent': 'center'})
                                 ])
+
                             ], width=12)
                         ])
                     ]
+                                
                 ),
                 dbc.Tab(
                     label="International Response",
@@ -1343,9 +1643,11 @@ def display_hover_data(node_data, edge_data):
      Output('debug-info', 'children')],
     [Input('cytoscape-faro-network', 'tapNodeData'),
      Input('reset-btn', 'n_clicks'),
-     Input('cytoscape-search-input', 'value')]
+     Input('cytoscape-search-input', 'value'),
+     Input('node-type-checklist', 'value'),
+     Input('edge-type-checklist', 'value')]
 )
-def filter_subgraph(tap_node, reset_clicks, search_value):
+def filter_subgraph(tap_node, reset_clicks, search_value, node_type_filters, edge_type_filters):
     """
     Updates Cytoscape elements based on interactions:
     - Node tap: Shows subgraph of tapped node and its neighbors.
@@ -1367,8 +1669,10 @@ def filter_subgraph(tap_node, reset_clicks, search_value):
         # Handle Reset Button Click
         if trigger_id == "reset-btn" and reset_clicks > 0:
             debug_info += f" Reset button clicked ({reset_clicks}). Search value: '{search_value}'."
-            # Reset shows full graph, filtered only by current search term
-            elements = create_cytoscape_elements('full', search_text=search_value or "")
+            # Reset shows full graph, filtered only by current search term and type filters
+            elements = create_cytoscape_elements('full', search_text=search_value or "", 
+                                             node_type_filters=node_type_filters, 
+                                             edge_type_filters=edge_type_filters)
             tap_output_msg = "Graph reset."
             if search_value:
                  tap_output_msg += f" Showing search results for '{search_value}'."
@@ -1380,8 +1684,21 @@ def filter_subgraph(tap_node, reset_clicks, search_value):
         if trigger_id == "cytoscape-search-input":
             debug_info += f" Search input changed. Value: '{search_value}'."
             # Filter full graph based on search
-            elements = create_cytoscape_elements('full', search_text=search_value or "")
+            elements = create_cytoscape_elements('full', search_text=search_value or "", 
+                                             node_type_filters=node_type_filters, 
+                                             edge_type_filters=edge_type_filters)
             tap_output_msg = f"Showing search results for '{search_value}'." if search_value else "Search cleared. Click on a node..."
+            return elements, tap_output_msg, debug_info
+            
+        # Handle Node Type or Edge Type filter changes
+        if trigger_id in ["node-type-checklist", "edge-type-checklist"]:
+            debug_info += f" Filter changed. Node types: {node_type_filters}, Edge types: {edge_type_filters}."
+            elements = create_cytoscape_elements('full', search_text=search_value or "", 
+                                             node_type_filters=node_type_filters, 
+                                             edge_type_filters=edge_type_filters)
+            tap_output_msg = "Graph filtered by node/edge types."
+            if search_value:
+                tap_output_msg += f" Also filtered by search: '{search_value}'."
             return elements, tap_output_msg, debug_info
 
         # Handle Node Tap
@@ -1413,6 +1730,16 @@ def filter_subgraph(tap_node, reset_clicks, search_value):
             sub_nodes_data = [n for n in all_nodes if n['id'] in neighbors]
             sub_edges_data = [e for e in all_edges if e['source'] in neighbors and e['target'] in neighbors]
 
+            # Filter sub nodes based on current node type filters
+            if node_type_filters:
+                sub_nodes_data = [n for n in sub_nodes_data if n['type'] in node_type_filters]
+                node_ids = {n['id'] for n in sub_nodes_data}
+                sub_edges_data = [e for e in sub_edges_data if e['source'] in node_ids and e['target'] in node_ids]
+            
+            # Filter sub edges based on current edge type filters
+            if edge_type_filters:
+                sub_edges_data = [e for e in sub_edges_data if e['type'] in edge_type_filters]
+
             # Convert to Cytoscape format
             new_elements = []
             for node in sub_nodes_data:
@@ -1441,9 +1768,10 @@ def filter_subgraph(tap_node, reset_clicks, search_value):
             return new_elements, tap_output_msg, debug_info
 
         # Default: If no specific action matched or search is empty, show full graph
-        # (This part completes your snippet)
         debug_info += " Default action: showing full graph."
-        elements = create_cytoscape_elements('full', search_text=search_value or "") # Apply search if present
+        elements = create_cytoscape_elements('full', search_text=search_value or "", 
+                                         node_type_filters=node_type_filters, 
+                                         edge_type_filters=edge_type_filters)
         tap_output_msg = f"Showing search results for '{search_value}'." if search_value else "Click on a node to see its subgraph details."
         return elements, tap_output_msg, debug_info
 
@@ -1455,64 +1783,213 @@ def filter_subgraph(tap_node, reset_clicks, search_value):
         return create_cytoscape_elements('full'), dbc.Alert(error_message, color="danger"), debug_info
 
 
-# --- [ Other Callbacks (update_timeline, update_actor_view) remain the same ] ---
-# ... (paste previous versions of update_timeline and update_actor_view here) ...
-@app.callback( [Output('timeline-graph', 'figure'), Output('event-details', 'children')], [Input('event-type-dropdown', 'value'), Input('date-range-picker', 'start_date'), Input('date-range-picker', 'end_date'), Input('timeline-graph', 'clickData')] )
-def update_timeline(selected_types, start_date_str, end_date_str, click_data):
-    # Uses revised create_timeline_figure with add_shape
+# Timeline Update Callback (Outputs Graph and Table Data)
+@app.callback(
+    [Output('timeline-graph', 'figure'),
+     Output('event-details', 'children'),
+     Output('timeline-table', 'data'), 
+     Output('timeline-loading-output', 'children')],
+    [Input('event-type-dropdown', 'value'),
+     Input('date-range-picker', 'start_date'),
+     Input('date-range-picker', 'end_date'),
+     Input('timeline-graph', 'clickData')],
+    [State('timeline-table', 'data')]
+)
+def update_timeline(selected_types, start_date_str, end_date_str, click_data, table_data_state):
+    ctx = dash.callback_context
+    trigger_id = ctx.triggered[0]['prop_id'].split('.')[0] if ctx.triggered else 'initial_load'
+
     filtered_df = timeline_df.copy()
-    if selected_types: filtered_df = filtered_df[filtered_df['type'].isin(selected_types)]
+
+    # Apply type filter
+    if selected_types:
+        filtered_df = filtered_df[filtered_df['type'].isin(selected_types)]
+
+    # Apply date filter
     if start_date_str and end_date_str:
-        try: start_date = pd.to_datetime(start_date_str); end_date = pd.to_datetime(end_date_str); filtered_df = filtered_df[(filtered_df['date_parsed'] >= start_date) & (filtered_df['date_parsed'] <= end_date)]
-        except ValueError: print(f"Error parsing dates: {start_date_str}, {end_date_str}")
+        try:
+            start_date = pd.to_datetime(start_date_str)
+            end_date = pd.to_datetime(end_date_str)
+            filtered_df = filtered_df[
+                (filtered_df['date_parsed'] >= start_date) &
+                (filtered_df['date_parsed'] <= end_date)
+            ]
+        except Exception as e:
+            print(f"Date parsing error: {e}")
+
     fig = create_timeline_figure(filtered_df)
-    event_details_children = html.Div("Click on an event in the timeline above to see details.")
-    ctx = dash.callback_context; triggered_id = ctx.triggered[0]['prop_id'].split('.')[0] if ctx.triggered else None
-    if triggered_id == 'timeline-graph' and click_data:
+    table_data = filtered_df[['date_str', 'title', 'type', 'location', 'actors_str']].to_dict('records')
+
+    # Handle clickData
+    event_details_children = "Click an event on the timeline for details."
+    if trigger_id == 'timeline-graph' and click_data:
         try:
             event_title = click_data['points'][0]['hovertext']
-            event_data = timeline_df[timeline_df['title'] == event_title].iloc[0]
+            row = timeline_df[timeline_df['title'] == event_title].iloc[0]
             preceded_by = causal_links_df[causal_links_df['target_event'] == event_title]['source_event'].tolist()
             led_to = causal_links_df[causal_links_df['source_event'] == event_title]['target_event'].tolist()
-            event_details_children = dbc.Card([ dbc.CardHeader(html.H5(event_data['title'])), dbc.CardBody([ dbc.Row([ dbc.Col(html.P([html.Strong("Date: "), event_data['date']]), md=6), dbc.Col(html.P([html.Strong("Location: "), event_data['location']]), md=6), ]), html.P([html.Strong("Type: "), event_data['type']]), html.P([html.Strong("Actors Involved: "), event_data['actors_str']]), html.H6("Summary:", style={'marginTop': '10px'}), html.P(event_data['summary']), html.H6("Causal Relationships:", style={'marginTop': '10px'}), html.Div([html.Strong("Preceded by: "), html.Span(", ".join(preceded_by) if preceded_by else "None")]), html.Div([html.Strong("Led to: "), html.Span(", ".join(led_to) if led_to else "None")]) ]) ], color="light")
-        except (KeyError, IndexError, TypeError) as e: print(f"Error processing timeline click data: {e}"); event_details_children = dbc.Alert("Error displaying event details.", color="danger")
-    return fig, event_details_children
 
-@app.callback( [Output('actor-network-container', 'style'), Output('actor-table-container', 'style'), Output('actor-details', 'children')], [Input('actor-view-toggle', 'value'), Input('actor-network-graph', 'clickData'), Input('actors-table', 'active_cell')], [State('actors-table', 'data')] )
+            event_details_children = dbc.Card([
+                dbc.CardHeader(html.H5(row['title'])),
+                dbc.CardBody([
+                    html.P([html.Strong("Date: "), row['date']]),
+                    html.P([html.Strong("Location: "), row['location']]),
+                    html.P([html.Strong("Type: "), row['type']]),
+                    html.P([html.Strong("Actors: "), row['actors_str']]),
+                    html.H6("Summary:"), html.P(row['summary']),
+                    html.H6("Causal Context:"),
+                    html.P([html.Strong("Preceded by: "), ", ".join(preceded_by) or "None"]),
+                    html.P([html.Strong("Led to: "), ", ".join(led_to) or "None"]),
+                ])
+            ])
+        except Exception as e:
+            print(f"Error extracting event details: {e}")
+
+    return fig, event_details_children, table_data, f"{len(filtered_df)} events shown"
+
+# Callback for Actor Tab View Toggle and Details
+@app.callback(
+    [Output('actor-network-container', 'style'),
+     Output('actor-table-container', 'style'),
+     Output('actor-details', 'children'),
+     Output('actor-network-graph', 'figure'),
+     Output('actor-table-loading-output', 'children')],
+    [Input('actor-view-toggle', 'value'),
+     Input('actor-network-graph', 'clickData'),
+     Input('actors-table', 'active_cell')],
+    [State('actors-table', 'data')]
+)
 def update_actor_view(view_option, network_click, table_cell, table_data):
     network_style = {'display': 'block'} if view_option == 'network' else {'display': 'none'}
     table_style = {'display': 'block'} if view_option == 'table' else {'display': 'none'}
-    actor_details_children = html.Div("Select an actor from the network or table above to view details.")
-    ctx = dash.callback_context; triggered_id = ctx.triggered[0]['prop_id'].split('.')[0] if ctx.triggered else None
+    actor_details_children = "Select an actor from the network or table above."
     actor_name = None
-    if triggered_id == 'actor-network-graph' and network_click:
-        try: actor_name = network_click['points'][0]['text']
-        except (KeyError, IndexError, TypeError): actor_name = None
-    elif triggered_id == 'actors-table' and table_cell and table_data:
-        try: actor_name = table_data[table_cell['row']]['Name']
-        except (KeyError, IndexError, TypeError): actor_name = None
+    table_loading_msg = ""
+
+    ctx = dash.callback_context
+    triggered_id = ctx.triggered[0]['prop_id'].split('.')[0] if ctx.triggered else None
+
+    # Extract clicked actor name from network or table
+    try:
+        if triggered_id == 'actor-network-graph' and network_click:
+            actor_name = network_click['points'][0]['text']
+        elif triggered_id == 'actors-table' and table_cell and table_data:
+            actor_name = table_data[table_cell['row']]['Name']
+    except Exception as e:
+        print(f"Error extracting actor: {e}")
+
+    # Build filtered subgraph if actor clicked
+    subgraph_fig = create_actor_relationships()
+    if view_option == 'network' and actor_name:
+        related_events = set()
+        connected_nodes = {actor_name}
+
+        # Find events this actor participated in
+        for edge in actor_event_edges + individual_event_edges:
+            if edge['source'] == actor_name:
+                related_events.add(edge['target'])
+
+        # Find other actors who also participated in those events
+        for edge in actor_event_edges + individual_event_edges:
+            if edge['target'] in related_events:
+                connected_nodes.add(edge['source'])
+
+        # Prepare subgraph using NetworkX
+        G = nx.Graph()
+        for node in all_nodes:
+            if node['id'] in connected_nodes or node['id'] in related_events:
+                G.add_node(node['id'], type=node['type'], color=node.get('color', '#ccc'), size=20)
+
+        for edge in all_edges:
+            if edge['source'] in G.nodes and edge['target'] in G.nodes:
+                G.add_edge(edge['source'], edge['target'])
+
+        try:
+            pos = nx.spring_layout(G, k=0.5)
+        except:
+            pos = nx.random_layout(G)
+
+        edge_x, edge_y = [], []
+        for e in G.edges():
+            x0, y0 = pos[e[0]]
+            x1, y1 = pos[e[1]]
+            edge_x.extend([x0, x1, None])
+            edge_y.extend([y0, y1, None])
+
+        node_x, node_y, node_text, node_color, node_size = [], [], [], [], []
+        for n in G.nodes(data=True):
+            node_id = n[0]
+            node_x.append(pos[node_id][0])
+            node_y.append(pos[node_id][1])
+            node_text.append(node_id)
+            node_color.append(n[1].get('color', '#888'))
+            node_size.append(n[1].get('size', 20))
+
+        edge_trace = go.Scatter(x=edge_x, y=edge_y, mode='lines', line=dict(width=1, color='#ccc'), hoverinfo='none')
+        node_trace = go.Scatter(x=node_x, y=node_y, mode='markers+text', text=node_text, textposition='top center',
+                                marker=dict(size=node_size, color=node_color, line=dict(width=1, color='black')),
+                                hovertext=node_text, hoverinfo='text')
+        subgraph_fig = go.Figure(data=[edge_trace, node_trace])
+        subgraph_fig.update_layout(
+            title=f"Connections of {actor_name}",
+            showlegend=False, hovermode='closest',
+            margin=dict(b=20, l=5, r=5, t=40),
+            xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+            yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+            height=700
+        )
+
+    # Prepare actor detail card
     if actor_name:
-        actor_info = None
-        actor_match = actors_df[actors_df['name'] == actor_name]
-        if not actor_match.empty:
-            actor_data = actor_match.iloc[0]; events = [e['target'] for e in actor_event_edges if e['source'] == actor_name]
-            actor_info = {'name': actor_data['name'], 'type': actor_data['type'], 'role': actor_data['role'], 'events': sorted(list(set(events)))}
+        match_ind = individuals_df[individuals_df['name'] == actor_name]
+        match_act = actors_df[actors_df['name'] == actor_name]
+        if not match_ind.empty:
+            ind = match_ind.iloc[0]
+            events = ind['events']
+            actor_details_children = dbc.Card([
+                dbc.CardHeader(html.H5(ind['name'])),
+                dbc.CardBody([
+                    html.P([html.Strong("Type: "), f"Individual ({ind['role']})"]),
+                    html.P([html.Strong("Involvement: "), ind['description']]),
+                    html.H6("Events:", style={'marginTop': '10px'}),
+                    html.Ul([html.Li(e) for e in events])
+                ])
+            ])
+        elif not match_act.empty:
+            act = match_act.iloc[0]
+            events = act['events']
+            actor_details_children = dbc.Card([
+                dbc.CardHeader(html.H5(act['name'])),
+                dbc.CardBody([
+                    html.P([html.Strong("Type: "), act['type']]),
+                    html.P([html.Strong("Role: "), act['role']]),
+                    html.H6("Events:", style={'marginTop': '10px'}),
+                    html.Ul([html.Li(e) for e in events])
+                ])
+            ])
         else:
-            ind_match = individuals_df[individuals_df['name'] == actor_name]
-            if not ind_match.empty:
-                ind_data = ind_match.iloc[0]; events = [e['target'] for e in individual_event_edges if e['source'] == actor_name]
-                actor_info = {'name': ind_data['name'], 'type': f"Individual ({ind_data['role']})", 'role': ind_data['description'], 'involvement': ind_data['involvement'], 'events': sorted(list(set(events)))}
-        if actor_info:
-            actor_details_children = dbc.Card([ dbc.CardHeader(html.H5(actor_info['name'])), dbc.CardBody([ html.P([html.Strong("Type: "), actor_info['type']]), html.P([html.Strong("Role/Description: "), actor_info['role']]), html.H6("Detailed Involvement:", style={'marginTop': '10px'}) if 'involvement' in actor_info else None, html.P(actor_info['involvement']) if 'involvement' in actor_info else None, html.H6("Events Involved In:", style={'marginTop': '10px'}), html.Ul([html.Li(event) for event in actor_info['events']]) if actor_info['events'] else html.P("No specific events linked.") ]) ], color="light")
-        else: actor_details_children = dbc.Alert(f"Details not found for '{actor_name}'.", color="warning")
-    return network_style, table_style, actor_details_children
+            actor_details_children = dbc.Alert(f"No details found for {actor_name}", color="warning")
 
+    return network_style, table_style, actor_details_children, subgraph_fig, table_loading_msg
 
-# ----------------------------------------------------------------------------------
+@app.callback(
+    Output('cytoscape-causal-graph', 'layout'),
+    Input('reset-causal-layout', 'n_clicks'),
+    prevent_initial_call=True
+)
+def reset_causal_layout(n_clicks):
+    return {
+        'name': 'breadthfirst',
+        'roots': '[id = "Ukraine Drops EU Deal; Protests Begin (Euromaidan)"]',
+        'spacingFactor': 1.5,
+        'animate': False
+    }
+
+# ------------------------------------------------------------------------------
 # RUN THE APPLICATION
-# ----------------------------------------------------------------------------------
-# --- [ if __name__ == '__main__': block remains the same ] ---
+# ------------------------------------------------------------------------------
 if __name__ == '__main__':
     print("Attempting to start Dash server...")
     print(f"Current Working Directory: {os.getcwd()}")
-    app.run(debug=True, host='0.0.0.0', port=8052)
+    # Run Dash server
+    app.run(debug=True, host='0.0.0.0', port=8052) # Changed port to 8052
