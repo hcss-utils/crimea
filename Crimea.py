@@ -4,7 +4,7 @@ import json
 from datetime import datetime, date
 import re
 import dash
-import dash_mantine_components as dmc
+# import dash_mantine_components as dmc
 from dash import Dash, html
 from dash import dcc, html, dash_table
 from dash.dependencies import Input, Output, State, ALL
