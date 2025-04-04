@@ -4,7 +4,7 @@ import json
 from datetime import datetime, date
 import re
 import dash
-# import dash_mantine_components as dmc
+import dash_mantine_components as dmc
 from dash import Dash, html
 from dash import dcc, html, dash_table
 from dash.dependencies import Input, Output, State, ALL
@@ -426,14 +426,20 @@ default_stylesheet = [
     }},
     {'selector': '.causal', 'style': { # Style for causal edges
         'line-color': '#333',
-        'target-arrow-shape': 'triangle',
-        'target-arrow-color': '#333'
+        'target-arrow-shape': 'vee',
+        'target-arrow-color': '#333',
+        # Optional: Add distance here too if causal arrows overlap nodes
+        # 'target-distance-from-node': '5px',
+        'target-arrow-fill': 'filled'
     }},
     {'selector': '.participation', 'style': { # Style for participation edges
         'line-color': '#999',
         'line-style': 'dashed',
-        'target-arrow-shape': 'tee',
-        'target-arrow-color': '#999'
+        'target-arrow-shape': 'vee',
+        'target-arrow-color': '#999',
+        # Optional: Add distance here too if causal arrows overlap nodes
+        # 'target-distance-from-node': '5px',
+        'target-arrow-fill': 'filled'
     }},
 
     # Styles for selected/hovered elements
@@ -940,17 +946,23 @@ app.layout = dbc.Container([
                    style={'textAlign': 'center', 'fontSize': '18px', 'marginBottom': '30px'})
         ], width=12)
     ]),
-    dbc.Tabs([
+
+    # Main Tabs Container
+    dbc.Tabs(id='tabs', active_tab="tab-1", children=[
+
+        # ======================================================================
         # TAB 1: FARO Knowledge Graph
+        # ======================================================================
         dbc.Tab(label="FARO Knowledge Graph", tab_id="tab-1", children=[
             dbc.Row([
                 dbc.Col([
                     html.H3("FARO Ontology Network (Cytoscape)",
                             style={'textAlign': 'center', 'marginTop': '20px'}),
-                    html.P("Interactive network of events, actors, and relationships. Hover for detailed tooltips. Click a node to focus on its subgraph details.",
+                    html.P("Interactive network of events, actors, and relationships. Hover for detailed tooltips. Click a node to focus.",
                            style={'textAlign': 'center', 'marginBottom': '20px'})
                 ], width=12)
             ]),
+            # Controls Row
             dbc.Row([
                 dbc.Col([
                     html.Label("Select Layout:"),
@@ -963,7 +975,7 @@ app.layout = dbc.Container([
                             {'label': 'Breadthfirst', 'value': 'breadthfirst'},
                             {'label': 'Dagre', 'value': 'dagre'}
                         ],
-                        value='cose',
+                        value='cose', # Default layout
                         clearable=False
                     )
                 ], width=4, md=3),
@@ -975,19 +987,21 @@ app.layout = dbc.Container([
                     html.Button("Reset Graph", id="reset-btn", n_clicks=0, className="btn btn-secondary", style={"marginTop": "28px"})
                 ], width=4, md=3)
             ], justify="center", style={'marginBottom': '20px'}),
+            # Cytoscape Graph Row
             dbc.Row([
                 dbc.Col([
                     dcc.Loading(id="loading-cytoscape", type="circle", children=[
                         cyto.Cytoscape(
                             id='cytoscape-faro-network',
-                            elements=create_cytoscape_elements('full'),
-                            layout={'name': 'cose', 'animate': True},
+                            elements=create_cytoscape_elements('full'), # Initial full graph
+                            layout={'name': 'cose', 'animate': True}, # Default layout
                             style={'width': '100%', 'height': '750px', 'border': '1px solid #ddd'},
                             stylesheet=default_stylesheet
                         )
                     ])
                 ], width=12)
             ]),
+            # Output/Details Row
             dbc.Row([
                 dbc.Col([
                     html.Div(id='cytoscape-hover-output', style={
@@ -995,168 +1009,181 @@ app.layout = dbc.Container([
                         'padding': '10px',
                         'border': '1px solid #ccc',
                         'borderRadius': '5px',
-                        'fontSize': '18px',
-                        'minHeight': '60px'
+                        'fontSize': '14px', # Adjusted font size
+                        'minHeight': '60px',
+                        'backgroundColor': '#f9f9f9' # Light background
                     }, children="Hover over a node or edge to see details."),
                     html.Div(id='cytoscape-tapNodeData-output', style={
-                        'marginTop': '20px',
-                        'padding': '10px',
-                        'border': '1px dashed #ccc'
+                        'marginTop': '15px', # Increased spacing
+                        'padding': '15px', # Increased padding
+                        'border': '1px dashed #ccc',
+                        'minHeight': '80px' # Increased min height
                     }, children="Click on a node to see its subgraph details.")
+                    # Note: The placeholder for cytoscape-loading-output was removed as the Output was removed from the callback
                 ], width=12)
             ]),
+            # Legend Row
             dbc.Row([
                 dbc.Col([
-                    html.H5("Legend:"),
+                    html.H5("Legend:", style={'textAlign': 'center', 'marginBottom': '10px'}),
                     dbc.Row([
                         dbc.Col([
-                            html.Div([html.Div(style={'backgroundColor': node_types["Event"],
-                                                       'width': '20px',
-                                                       'height': '20px',
-                                                       'display': 'inline-block',
-                                                       'marginRight': '5px',
-                                                       'border': '1px solid #ccc'}),
-                                      html.Span(" Event", style={'verticalAlign': 'middle'})],
-                                     style={'marginBottom': '5px'}),
-                            html.Div([html.Div(style={'backgroundColor': node_types["Individual"],
-                                                       'width': '20px',
-                                                       'height': '20px',
-                                                       'display': 'inline-block',
-                                                       'marginRight': '5px',
-                                                       'border': '1px solid #ccc'}),
-                                      html.Span(" Individual", style={'verticalAlign': 'middle'})],
-                                     style={'marginBottom': '5px'})
-                        ], width=6, md=4),
+                            html.Div([html.Div(style={'backgroundColor': node_types["Event"], 'width': '20px', 'height': '20px', 'display': 'inline-block', 'marginRight': '5px', 'border': '1px solid #ccc', 'borderRadius': '50%'}), html.Span(" Event", style={'verticalAlign': 'middle'})], style={'marginBottom': '5px'}),
+                            html.Div([html.Div(style={'backgroundColor': node_types["Individual"], 'width': '20px', 'height': '20px', 'display': 'inline-block', 'marginRight': '5px', 'border': '1px solid #ccc', 'transform': 'rotate(45deg)'}), html.Span(" Individual", style={'verticalAlign': 'middle'})], style={'marginBottom': '5px'})
+                        ], width=6, sm=3),
                         dbc.Col([
-                            html.Div([html.Div(style={'backgroundColor': node_types["Country"],
-                                                       'width': '20px',
-                                                       'height': '20px',
-                                                       'display': 'inline-block',
-                                                       'marginRight': '5px',
-                                                       'border': '1px solid #ccc'}),
-                                      html.Span(" Country", style={'verticalAlign': 'middle'})],
-                                     style={'marginBottom': '5px'}),
-                            html.Div([html.Div(style={'backgroundColor': node_types["Organization"],
-                                                       'width': '20px',
-                                                       'height': '20px',
-                                                       'display': 'inline-block',
-                                                       'marginRight': '5px',
-                                                       'border': '1px solid #ccc'}),
-                                      html.Span(" Org/Other", style={'verticalAlign': 'middle'})],
-                                     style={'marginBottom': '5px'})
-                        ], width=6, md=4)
+                            html.Div([html.Div(style={'backgroundColor': node_types["Country"], 'width': '20px', 'height': '20px', 'display': 'inline-block', 'marginRight': '5px', 'border': '1px solid #ccc'}), html.Span(" Country", style={'verticalAlign': 'middle'})], style={'marginBottom': '5px'}),
+                            html.Div([html.Div(style={'backgroundColor': node_types["Organization"], 'width': '20px', 'height': '20px', 'display': 'inline-block', 'marginRight': '5px', 'border': '1px solid #ccc'}), html.Span(" Org/Group/Force", style={'verticalAlign': 'middle'})], style={'marginBottom': '5px'})
+                        ], width=6, sm=4),
+                        dbc.Col([
+                             html.Div([html.Span("—— Causal Link", style={'color': '#333'})], style={'marginBottom': '5px'}),
+                             html.Div([html.Span("- - - Participation Link", style={'color': '#999'})], style={'marginBottom': '5px'})
+                        ], width=12, sm=5)
                     ], justify="center")
                 ], width=12)
-            ], style={'marginTop': '20px', 'padding': '15px', 'border': '1px solid #ddd', 'backgroundColor': 'rgba(250, 250, 250, 0.9)'})
-        ]),
+            ], style={'marginTop': '20px', 'padding': '15px', 'border': '1px solid #ddd', 'backgroundColor': '#fafafa'})
+        ]), # End Tab 1
+
+        # ======================================================================
         # TAB 2: Chronological Event Timeline
+        # ======================================================================
         dbc.Tab(label="Chronological Event Timeline", tab_id="tab-2", children=[
             dbc.Row([
                 dbc.Col([
                     html.H3("Timeline of Key Events",
                             style={'textAlign': 'center', 'marginTop': '20px'}),
-                    html.P("Use the dropdown below to filter by event type and the date picker for a custom range.",
+                    html.P("Use the filters below to explore the sequence of events.",
                            style={'textAlign': 'center', 'marginBottom': '20px'})
                 ], width=12)
             ]),
+            # Controls Row
             dbc.Row([
                 dbc.Col([
                     html.Label("Filter by Event Type:"),
                     dcc.Dropdown(
                         id='event-type-dropdown',
                         options=[{'label': t, 'value': t} for t in sorted(timeline_df['type'].unique())],
-                        value=[],
+                        value=[], # Default to showing all types
                         multi=True,
                         placeholder="Select event types..."
                     )
-                ], width=6, md=6),
+                ], width=12, md=6), # Full width on small screens
                 dbc.Col([
-                    html.Label("Date Range:"),
+                    html.Label("Filter by Date Range:"),
                     dcc.DatePickerRange(
                         id='date-range-picker',
                         min_date_allowed=timeline_df['date_parsed'].min().date(),
                         max_date_allowed=timeline_df['date_parsed'].max().date(),
                         start_date=timeline_df['date_parsed'].min().date(),
                         end_date=timeline_df['date_parsed'].max().date(),
-                        display_format='DD MMM YY'
+                        display_format='DD MMM YYYY', # Changed format slightly
+                        style={'width': '100%'} # Ensure it fills column
                     )
-                ], width=6, md=6)
+                ], width=12, md=6) # Full width on small screens
             ], justify="center", style={'marginBottom': '20px'}),
+            # Timeline Graph Row
             dbc.Row([
                 dbc.Col([
-                    dcc.Graph(id='timeline-graph', figure=create_timeline_figure(), style={'height': '600px'})
+                    dcc.Loading(id="loading-timeline", type="circle", children=[ # Added Loading component
+                        dcc.Graph(id='timeline-graph', figure=create_timeline_figure(), style={'height': '600px'})
+                    ])
                 ], width=12)
             ]),
+            # Event Details Row
             dbc.Row([
                 dbc.Col([
                     html.H4("Event Details", style={'marginTop': '30px'}),
                     dcc.Loading(id='loading-event-details', type='circle', children=[
-                        html.Div(id='event-details', children="Click on an event in the timeline above to see details.")
-                    ], style={'marginTop': '10px', 'padding': '15px', 'border': '1px solid #eee', 'minHeight': '100px'})
+                        html.Div(id='event-details', children=[dbc.Alert("Click on an event bubble in the timeline above to see its details, including summary and causal links.", color="info")], style={'marginTop': '10px', 'padding': '15px', 'border': '1px solid #eee', 'minHeight': '100px', 'backgroundColor': '#fdfdfd'})
+                    ])
                 ], width=12)
             ]),
-            # Add hidden div for storing timeline table data
-            html.Div(id='timeline-table', style={'display': 'none'})
-        ]),
+            # Hidden storage for timeline data (Corrected component type)
+            dcc.Store(id='timeline-table')
+        ]), # End Tab 2
+
+        # ======================================================================
         # TAB 3: Actors and Roles
+        # ======================================================================
         dbc.Tab(label="Actors and Roles", tab_id="tab-3", children=[
             dbc.Row([
                 dbc.Col([
-                    html.H3("Key Actors", style={'textAlign': 'center', 'marginTop': '20px'}),
-                    html.P("Toggle between the relationship network and a detailed table.", style={'textAlign': 'center', 'marginBottom': '20px'}),
+                    html.H3("Key Actors and Individuals", style={'textAlign': 'center', 'marginTop': '20px'}),
+                    html.P("Explore the relationships between actors or view a detailed table.", style={'textAlign': 'center', 'marginBottom': '20px'}),
                     dbc.RadioItems(
                         id='actor-view-toggle',
                         options=[
                             {'label': 'Relationship Network', 'value': 'network'},
                             {'label': 'Detailed Table', 'value': 'table'}
                         ],
-                        value='network',
+                        value='network', # Default view
                         inline=True,
-                        style={'textAlign': 'center'}
+                        style={'textAlign': 'center', 'marginBottom': '20px'}
                     )
                 ], width=12)
             ]),
+            # Container for Network/Table
             dbc.Row([
                 dbc.Col([
+                    # Network View (Initially visible)
                     html.Div(id='actor-network-container', children=[
                         dcc.Loading(id='loading-actor-network', type='circle', children=[
                             dcc.Graph(id='actor-network-graph', figure=create_actor_relationships(), style={'height': '700px'})
                         ])
-                    ], style={'display': 'block'}),
+                    ], style={'display': 'block'}), # Starts visible
+
+                    # Table View (Initially hidden)
                     html.Div(id='actor-table-container', children=[
-                        dash_table.DataTable(
-                            id='actors-table',
-                            columns=[
-                                {'name': 'Name', 'id': 'Name'},
-                                {'name': 'Type', 'id': 'Type'},
-                                {'name': 'Role/Description', 'id': 'Role/Description'},
-                                {'name': 'Events Involved In', 'id': 'Events Involved In'}
-                            ],
-                            data=create_actors_table().to_dict('records'),
-                            style_table={'overflowX': 'auto'},
-                            style_header={'backgroundColor': 'rgb(230, 230, 230)', 'fontWeight': 'bold'},
-                            style_cell={'textAlign': 'left', 'padding': '10px', 'whiteSpace': 'normal', 'height': 'auto', 'minWidth': '100px', 'width': 'auto', 'maxWidth': '300px'},
-                            page_size=15,
-                            filter_action="native",
-                            sort_action="native",
-                            sort_mode="multi",
-                            style_data_conditional=[{'if': {'row_index': 'odd'}, 'backgroundColor': 'rgb(248, 248, 248)'}]
-                        )
-                    ], style={'display': 'none'}),
+                        dcc.Loading(id="loading-actors-table", type="circle", children=[ # Added Loading
+                            dash_table.DataTable(
+                                id='actors-table',
+                                columns=[
+                                    {'name': 'Name', 'id': 'Name'},
+                                    {'name': 'Type', 'id': 'Type'},
+                                    {'name': 'Role/Description', 'id': 'Role/Description'},
+                                    # Removed 'Events Involved In' for brevity, details shown on click
+                                ],
+                                data=create_actors_table()[['Name', 'Type', 'Role/Description']].to_dict('records'), # Select columns for display
+                                style_table={'overflowX': 'auto'},
+                                style_header={'backgroundColor': 'rgb(230, 230, 230)', 'fontWeight': 'bold', 'border': '1px solid lightgrey'},
+                                style_cell={
+                                    'textAlign': 'left', 'padding': '10px',
+                                    'whiteSpace': 'normal', 'height': 'auto',
+                                    'minWidth': '100px', 'width': 'auto', 'maxWidth': '350px', # Increased max width
+                                    'border': '1px solid lightgrey' # Added cell borders
+                                 },
+                                page_size=20, # Increased page size
+                                filter_action="native",
+                                sort_action="native",
+                                sort_mode="multi",
+                                row_selectable="single", # Allow selecting a row
+                                selected_rows=[],
+                                style_data_conditional=[{'if': {'row_index': 'odd'}, 'backgroundColor': 'rgb(248, 248, 248)'}]
+                            )
+                        ])
+                    ], style={'display': 'none'}), # Starts hidden
+
+                    # Actor Details Output Area
                     html.Div([
                         html.H4("Actor Details", style={'marginTop': '30px'}),
                         dcc.Loading(id='loading-actor-details', type='circle', children=[
-                            html.Div(id='actor-details', children="Select an actor from the network or table above to view details.")
-                        ], style={'marginTop': '10px', 'padding': '15px', 'border': '1px solid #eee', 'minHeight': '100px'})
+                            html.Div(id='actor-details', children=[dbc.Alert("Click an actor in the network or select a row in the table to view details.", color="info")], style={'marginTop': '10px', 'padding': '15px', 'border': '1px solid #eee', 'minHeight': '100px', 'backgroundColor': '#fdfdfd'})
+                        ])
                     ])
                 ], width=12)
             ]),
-            # Add a hidden div for table loading feedback
+            # Hidden div for table loading feedback (if needed by callbacks)
             html.Div(id='actor-table-loading-output', style={'display': 'none'})
-        ])
-# TAB 4: Analysis & Perspectives
+        ]), # End Tab 3
+
+        # ======================================================================
+        # TAB 4: Analysis & Perspectives (Incorporates Subtabs)
+        # ======================================================================
         dbc.Tab(label="Analysis & Perspectives", tab_id="tab-4", children=[
-            dbc.Tabs([
+            # Outer Tabs for different analysis sections
+            dbc.Tabs(id='analysis-subtabs', active_tab="analysis-causal", children=[
+
+                # --- Causal Patterns Sub-Section ---
                 dbc.Tab(
                     label="Causal Patterns",
                     tab_id="analysis-causal",
@@ -1164,7 +1191,7 @@ app.layout = dbc.Container([
                         dbc.Row([
                             dbc.Col([
                                 html.H4("Causal Chain Analysis", style={'marginTop': '20px'}),
-                                html.P("The annexation unfolded through a series of causal steps:"),
+                                html.P("The annexation unfolded through a series of causal steps. Explore the key events chronologically or view the full causal network."),
                                 html.Ol([
                                     html.Li("Ukrainian Revolution triggers protests."),
                                     html.Li("Pro-Russian sentiment rises in Crimea."),
@@ -1174,69 +1201,65 @@ app.layout = dbc.Container([
                                     html.Li("Formal annexation follows."),
                                     html.Li("International condemnation and sanctions are imposed."),
                                     html.Li("Control is consolidated in Crimea.")
-                                ]),
-                                html.Div([
-                                    html.H5("Key Turning Points Visualization"),
-                                    dbc.Row([
-                                        dbc.Col([
-                                            html.Label("Select Layout:"),
-                                            dcc.Dropdown(
-                                                id='cytoscape-causal-layout-dropdown',
-                                                options=[
-                                                    {'label': 'Breadthfirst', 'value': 'breadthfirst'},
-                                                    {'label': 'Cose (Force Directed)', 'value': 'cose'},
-                                                    {'label': 'Grid', 'value': 'grid'},
-                                                    {'label': 'Circle', 'value': 'circle'},
-                                                    {'label': 'Dagre', 'value': 'dagre'}
-                                                ],
-                                                value='breadthfirst',
-                                                clearable=False),
-                                            dcc.Graph(
-                                                id='causal-flow-chart',
-                                                figure=px.scatter(
-                                                    events_df.iloc[[0, 2, 5, 9, 12, 13, 17, 19]],
-                                                    x='date_parsed',
-                                                    y='type',
-                                                    text='title',
-                                                    size=[20]*8,
-                                                    color='type',
-                                                    height=400,
-                                                    labels={"date_parsed": "Timeline", "type": "Event Category"},
-                                                    title="Critical Events in the Annexation Sequence"
-                                                ).update_traces(
-                                                    mode='markers+text',
-                                                    textposition='top center',
-                                                    textfont_size=12
-                                                ).update_layout(
-                                                    yaxis={'visible': True, 'title': 'Event Category'},
-                                                    xaxis_title="Timeline",
-                                                    showlegend=True,
-                                                    legend_title_text='Category',margin=dict(l=20, r=20, t=50, b=100)
+                                ], style={'marginBottom': '20px'}),
+
+                                # --- Inner Tabs for Causal Visualizations ---
+                                dbc.Tabs(id="causal-subtabs", active_tab="subtab-timeline", children=[
+
+                                    # --- Inner Tab 1: Timeline Scatter Plot ---
+                                    dbc.Tab(label="Key Events Timeline", tab_id="subtab-timeline", children=[
+                                        dbc.Row([
+                                            dbc.Col([
+                                                html.H5("Critical Events in the Annexation Sequence", style={'marginTop': '20px', 'textAlign':'center'}),
+                                                dcc.Graph(
+                                                    id='causal-flow-chart',
+                                                    figure=px.scatter(
+                                                        events_df.iloc[[0, 2, 5, 9, 12, 13, 17, 19]],
+                                                        x='date_parsed', y='type', text='title', size=[20]*8, color='type',
+                                                        height=500, labels={"date_parsed": "Timeline", "type": "Event Category"}, title=None
+                                                    ).update_traces(mode='markers+text', textposition='top center', textfont_size=10
+                                                    ).update_layout(yaxis={'visible': True, 'title': 'Event Category'}, xaxis_title="Timeline", showlegend=True, legend_title_text='Category', margin=dict(l=20, r=20, t=10, b=100))
                                                 )
-                                            )
-                                        ], width=12, md=6),
-                                        dbc.Col([
-                                            html.Button("Reset Layout", id="reset-causal-layout", n_clicks=0, className="btn btn-secondary", style={"marginTop": "28px"}),
-                                            dcc.Loading(id="loading-cytoscape-causal", type="default", children=[
-                                                cyto.Cytoscape(
-                                                    id='cytoscape-causal-graph',
-                                                    elements=create_cytoscape_elements('causal_only'),
-                                                    layout={'name': 'breadthfirst', 'roots': '[id = "Ukraine Drops EU Deal; Protests Begin (Euromaidan)"]', 'spacingFactor': 1.5, 'animate': False},
-                                                    style={'width': '100%', 'height': '500px', 'border': '1px solid #ddd'},
-                                                    stylesheet=default_stylesheet
-                                                )
-                                            ])
-                                        ], width=12, md=6)
-                                    ])
-                                ])
+                                            ], width=12)
+                                        ])
+                                    ]), # End Inner Tab 1
+
+                                    # --- Inner Tab 2: Causal Network Graph ---
+                                    dbc.Tab(label="Causal Chain Network", tab_id="subtab-network", children=[
+                                        dbc.Row([
+                                            dbc.Col([ # Controls Column
+                                                html.Label("Select Layout:", style={'marginTop': '20px'}),
+                                                dcc.Dropdown(
+                                                    id='cytoscape-causal-layout-dropdown',
+                                                    options=[ {'label': 'Cose (Force Directed)', 'value': 'cose'}, {'label': 'Breadthfirst', 'value': 'breadthfirst'}, {'label': 'Grid', 'value': 'grid'}, {'label': 'Circle', 'value': 'circle'}, {'label': 'Dagre', 'value': 'dagre'} ],
+                                                    value='cose', clearable=False
+                                                ),
+                                                html.Button("Reset Layout", id="reset-causal-layout", n_clicks=0, className="btn btn-secondary", style={"marginTop": "15px", "width": "100%"})
+                                            ], width=12, md=3, style={'paddingTop': '20px'}),
+                                            dbc.Col([ # Graph Column
+                                                dcc.Loading(id="loading-cytoscape-causal", type="default", children=[
+                                                    cyto.Cytoscape(
+                                                        id='cytoscape-causal-graph',
+                                                        elements=create_cytoscape_elements('causal_only'),
+                                                        layout={'name': 'cose', 'animate': False}, # Default layout set
+                                                        style={'width': '100%', 'height': '550px', 'border': '1px solid #ddd', 'marginTop': '20px'},
+                                                        stylesheet=default_stylesheet
+                                                    )
+                                                ])
+                                            ], width=12, md=9)
+                                        ])
+                                    ]), # End Inner Tab 2
+                                ]), # --- End Inner Tabs ---
                             ], width=12)
                         ])
                     ]
-                ),
+                ), # End Causal Patterns Tab
+
+                # --- International Response Sub-Section ---
                 dbc.Tab(
                     label="International Response",
                     tab_id="analysis-intl",
-                    children=[
+                    children=[ # Content Copied from previous version
                         dbc.Row([
                             dbc.Col([
                                 html.H4("International Response Analysis", style={'marginTop': '20px'}),
@@ -1247,11 +1270,8 @@ app.layout = dbc.Container([
                                         dcc.Graph(
                                             id='un-vote-chart',
                                             figure=px.pie(
-                                                names=['In favor (Affirming Ukraine Integrity)', 'Against (Opposing Resolution)', 'Abstentions', 'Non-Voting'],
-                                                values=[100, 11, 58, 24],
-                                                title="UNGA Vote on Ukraine's Territorial Integrity (Mar 2014)",
-                                                color_discrete_sequence=['#4285F4', '#EA4335', '#FBBC05', '#CCCCCC'],
-                                                hole=0.3
+                                                names=['In favor (Affirming Ukraine Integrity)', 'Against (Opposing Resolution)', 'Abstentions', 'Non-Voting'], values=[100, 11, 58, 24],
+                                                title="UNGA Vote on Ukraine's Territorial Integrity (Mar 2014)", color_discrete_sequence=['#4285F4', '#EA4335', '#FBBC05', '#CCCCCC'], hole=0.3
                                             ).update_traces(textinfo='percent+label')
                                         )
                                     ], width=12, lg=6),
@@ -1260,109 +1280,63 @@ app.layout = dbc.Container([
                                         dcc.Graph(
                                             id='sanctions-timeline',
                                             figure=px.timeline(
-                                                pd.DataFrame([
-                                                    dict(Sanction="US Initial Individual Sanctions", Start='2014-03-17', Finish='2014-03-20', Actor='US'),
-                                                    dict(Sanction="EU Initial Individual Sanctions", Start='2014-03-17', Finish='2014-03-21', Actor='EU'),
-                                                    dict(Sanction="G7 Suspends Russia", Start='2014-03-24', Finish='2014-03-25', Actor='G7'),
-                                                    dict(Sanction="Expanded Sectoral Sanctions", Start='2014-07-16', Finish='2014-07-31', Actor='US/EU')
-                                                ]),
-                                                x_start="Start",
-                                                x_end="Finish",
-                                                y="Sanction",
-                                                color="Actor",
-                                                title="Timeline of Early Western Sanctions",
-                                                labels={"Sanction": "Sanction Type/Action"}
-                                            ).update_yaxes(
-                                                categoryorder='array',
-                                                categoryarray=[
-                                                    "Expanded Sectoral Sanctions",
-                                                    "G7 Suspends Russia",
-                                                    "EU Initial Individual Sanctions",
-                                                    "US Initial Individual Sanctions"
-                                                ]
-                                            )
+                                                pd.DataFrame([ dict(Sanction="US Initial Individual Sanctions", Start='2014-03-17', Finish='2014-03-20', Actor='US'), dict(Sanction="EU Initial Individual Sanctions", Start='2014-03-17', Finish='2014-03-21', Actor='EU'), dict(Sanction="G7 Suspends Russia from G8", Start='2014-03-24', Finish='2014-03-25', Actor='G7'), dict(Sanction="Expanded Sectoral Sanctions", Start='2014-07-16', Finish='2014-07-31', Actor='US/EU') ]),
+                                                x_start="Start", x_end="Finish", y="Sanction", color="Actor", title="Timeline of Early Western Sanctions", labels={"Sanction": "Sanction Type/Action"}
+                                            ).update_yaxes( categoryorder='array', categoryarray=[ "Expanded Sectoral Sanctions", "G7 Suspends Russia from G8", "EU Initial Individual Sanctions", "US Initial Individual Sanctions" ] )
                                         )
                                     ], width=12, lg=6)
                                 ]),
                                 html.H5("Key Response Patterns:", style={'marginTop': '30px'}),
                                 html.Ul([
-                                    html.Li("Diplomatic condemnation and legal resolutions."),
-                                    html.Li("Economic sanctions and asset freezes."),
-                                    html.Li("Actions by international organizations."),
-                                    html.Li("Avoidance of direct military confrontation."),
-                                    html.Li("Long-term strategic isolation of Russia.")
+                                    html.Li("Diplomatic condemnation and legal resolutions (UN)."), html.Li("Targeted economic sanctions (individual and sectoral) by US, EU, G7."), html.Li("Suspension from international forums (G8 -> G7)."), html.Li("Actions by international organizations (OSCE observer attempts)."), html.Li("Avoidance of direct military confrontation by Western powers."), html.Li("Long-term policy of non-recognition of the annexation.")
                                 ])
                             ], width=12)
                         ])
                     ]
-                ),
+                ), # End International Response Tab
+
+                # --- Legal & Territorial Impact Sub-Section ---
                 dbc.Tab(
                     label="Legal & Territorial Impact",
                     tab_id="analysis-legal",
-                    children=[
+                    children=[ # Content Copied from previous version
                         dbc.Row([
                             dbc.Col([
                                 html.H4("Legal and Territorial Consequences", style={'marginTop': '20px'}),
-                                html.P("The annexation violated several international legal principles while permanently altering Crimea's status."),
+                                html.P("The annexation violated several international legal principles while altering Crimea's de facto status, leading to widespread non-recognition."),
                                 dbc.Row([
                                     dbc.Col([
                                         html.H5("Violations of International Law Cited"),
-                                        html.Ul([
-                                            html.Li([html.Strong("UN Charter:"), " Prohibition against the use of force to alter borders."]),
-                                            html.Li([html.Strong("Helsinki Final Act (1975):"), " Inviolability of frontiers."]),
-                                            html.Li([html.Strong("Budapest Memorandum (1994):"), " Pledges to respect Ukraine's sovereignty."]),
-                                            html.Li([html.Strong("Russia-Ukraine Friendship Treaty (1997):"), " Explicit recognition of Crimea as part of Ukraine."]),
-                                            html.Li([html.Strong("Ukrainian Constitution:"), " Requires national referendum for territorial changes."])
-                                        ]),
+                                        html.Ul([ html.Li([html.Strong("UN Charter:"), " Principles of sovereignty, territorial integrity, and prohibition against the use of force to acquire territory."]), html.Li([html.Strong("Helsinki Final Act (1975):"), " Inviolability of frontiers and territorial integrity of States."]), html.Li([html.Strong("Budapest Memorandum (1994):"), " Security assurances to Ukraine respecting independence, sovereignty, and existing borders in exchange for denuclearization."]), html.Li([html.Strong("Russia-Ukraine Friendship Treaty (1997):"), " Recognition of existing borders and territorial integrity."]), html.Li([html.Strong("Ukrainian Constitution:"), " Territorial changes require a national referendum, not just regional."]) ]),
                                         html.H5("Russian Justifications / Counterarguments:", style={'marginTop': '15px'}),
-                                        html.Ul([
-                                            html.Li("Protection of Russian speakers."),
-                                            html.Li("Right to self-determination."),
-                                            html.Li("Alleged invitation from a deposed leader."),
-                                            html.Li("Correction of historical injustice.")
-                                        ])
+                                        html.Ul([ html.Li("Protection of Russian-speaking population / ethnic Russians."), html.Li("Exercise of the right to self-determination by the people of Crimea (via referendum)."), html.Li("Alleged request for intervention/assistance (from Aksyonov/Yanukovych)."), html.Li("Correction of historical 'injustice' (1954 transfer to Ukrainian SSR)."), html.Li("Reference to Kosovo precedent (though widely disputed).") ])
                                     ], width=12, lg=6),
                                     dbc.Col([
                                         html.H5("Territorial Impact - Crimea Profile"),
-                                        dbc.Card(
-                                            dbc.CardBody([
-                                                html.P([html.Strong("Area: "), "~27,000 km²"]),
-                                                html.P([html.Strong("Population (2014 est.): "), "~2.3 million"]),
-                                                html.P([html.Strong("Coastline: "), "~1,000 km"]),
-                                                html.P([html.Strong("Strategic Importance: "), "Base for Russia's Black Sea Fleet"]),
-                                                html.P([html.Strong("Economic Impact: "), "Loss of tourism, port revenue, and international trade."])
-                                            ]),
-                                            className="mb-3"
-                                        ),
-                                        html.P(
-                                            [html.Strong("Status Discrepancy:"), " Russia administers Crimea despite non-recognition by most nations."],
-                                            style={'marginTop': '20px'}
-                                        )
+                                        dbc.Card(dbc.CardBody([ html.P([html.Strong("Status:"), " De facto administered by Russia; De jure recognized as Ukraine by most of the international community."]), html.P([html.Strong("Area: "), "~27,000 km² (Peninsula)"]), html.P([html.Strong("Population (2014 est.): "), "~2.3 million"]), html.P([html.Strong("Strategic Importance: "), " Base for Russia's Black Sea Fleet (Sevastopol), control over Black Sea access."]), html.P([html.Strong("Economic Impact: "), " Integration into Russian economy, disruption of ties with mainland Ukraine, impact of sanctions, dependence on Russian infrastructure (e.g., Kerch Bridge)."]) ]), className="mb-3", outline=True, color="secondary"),
+                                        html.P([html.Strong(f"Ongoing Situation (as of {datetime.now().strftime('%B %Y')}):"), " Crimea remains under Russian control and integrated into its legal/administrative system. Ukraine maintains its claim and non-recognition policies. The peninsula is a focal point in the ongoing Russo-Ukrainian War."], style={'marginTop': '20px', 'fontWeight': 'bold'})
                                     ], width=12, lg=6)
                                 ]),
-                                html.P(
-                                    [html.Strong("Lasting Status (as of April 2025):"), " Crimea remains under Russian control, with ongoing legal and diplomatic disputes."],
-                                    style={'marginTop': '20px', 'fontWeight': 'bold'}
-                                )
                             ], width=12)
                         ])
                     ]
-                )
-            ],
-            id='analysis-subtabs',
-            active_tab="analysis-causal"
-        ])
-    ], id='tabs', active_tab="tab-1"),
+                ) # End Legal & Territorial Impact Tab
+            ]) # End Outer Tabs ('analysis-subtabs')
+        ]), # End Tab 4 ('Analysis & Perspectives')
+
+    ]), # End Main Tabs ('tabs')
+
+    # Footer Row
     dbc.Row([
         dbc.Col([
-            html.Hr(),
+            html.Hr(style={'marginTop': '40px'}), # Increased top margin
             html.P(
-                ["Data compiled from open sources.", html.Br(), "Visualization based on FARO ontology."],
+                ["Data compiled from open sources.", html.Br(), f"Visualization generated on {datetime.now().strftime('%Y-%m-%d')}. Based on FARO ontology principles."],
                 style={'textAlign': 'center', 'marginTop': '20px', 'color': '#666', 'fontSize': '14px'}
             )
         ], width=12)
     ])
-], fluid=True, style={'fontFamily': 'Arial, sans-serif'})
+], fluid=True, style={'fontFamily': 'Arial, sans-serif', 'backgroundColor': '#f0f2f5'}) # Added a light page background
 
 # ------------------------------------------------------------------------------
 # CALLBACKS - with additional error handling and debug output
@@ -1370,51 +1344,66 @@ app.layout = dbc.Container([
 
 # Callback for Cytoscape layout dropdown
 @app.callback(
-    [Output('cytoscape-faro-network', 'layout'),
-     Output('cytoscape-loading-output', 'children')],
+    # Only output the layout now
+    Output('cytoscape-faro-network', 'layout'),
+    # Remove the second Output: Output('cytoscape-loading-output', 'children')
     Input('cytoscape-layout-dropdown', 'value')
 )
 def update_cytoscape_layout(layout_name):
     if debug_mode:
         print(f"Updating layout to: {layout_name}")
-    
+
     try:
-        layout_config = {'name': layout_name, 'animate': False}  # Disabled animation for better performance
+        layout_config = {'name': layout_name, 'animate': False}
         if layout_name == 'cose':
             layout_config['idealEdgeLength'] = 100
             layout_config['nodeRepulsion'] = 400000
         elif layout_name == 'dagre':
             layout_config['rankDir'] = 'TB'
-        
-        return layout_config, f"Graph displayed using {layout_name} layout. Click nodes to explore connections."
+
+        # Only return the layout config now
+        return layout_config
+        # Remove the second return value: f"Graph displayed using {layout_name} layout..."
+
     except Exception as e:
         if debug_mode:
             print(f"Error updating layout: {e}")
-        return {'name': 'grid'}, f"Error loading {layout_name} layout. Using grid instead."
-
-# Callback for causal graph layout
+        # Only return the fallback layout config
+        return {'name': 'grid'}
+        
 @app.callback(
     Output('cytoscape-causal-graph', 'layout'),
-    Input('cytoscape-causal-layout-dropdown', 'value'),
-    prevent_initial_call=True
+    [Input('cytoscape-causal-layout-dropdown', 'value'),
+     Input('reset-causal-layout', 'n_clicks')]
 )
-def update_cytoscape_causal_layout(layout_name):
-    if debug_mode:
-        print(f"Updating causal layout to: {layout_name}")
-    
-    try:
-        layout_config = {'name': layout_name, 'animate': False}  # Disabled animation for better performance
-        if layout_name == 'cose':
-            layout_config['idealEdgeLength'] = 100
-            layout_config['nodeRepulsion'] = 400000
-        elif layout_name == 'dagre':
-            layout_config['rankDir'] = 'TB'
-        elif layout_name == 'breadthfirst':
-            layout_config['roots'] = '[id = "Ukraine Drops EU Deal; Protests Begin (Euromaidan)"]'
-            layout_config['spacingFactor'] = 1.5
-        return layout_config
-    except Exception as e:
-        return {'name': 'breadthfirst', 'roots': '[id = "Ukraine Drops EU Deal; Protests Begin (Euromaidan)"]', 'spacingFactor': 1.5, 'animate': False}
+def update_or_reset_layout(layout_name, n_clicks):
+    ctx = dash.callback_context
+    trigger = ctx.triggered[0]['prop_id'].split('.')[0] if ctx.triggered else None
+
+    if trigger == 'reset-causal-layout':
+        return {
+            'name': 'cose',
+            # Corrected roots selector:
+            'roots': '#Ukraine Drops EU Deal; Protests Begin (Euromaidan)',
+            'spacingFactor': 1.5,
+            'animate': False,
+            'orientation': 'vertical' # Keep this if you want top-down
+        }
+
+    layout_config = {'name': layout_name, 'animate': False}
+    if layout_name == 'breadthfirst':
+        layout_config['roots'] = '#Ukraine Drops EU Deal; Protests Begin (Euromaidan)'
+        layout_config['spacingFactor'] = 1.5
+        layout_config['orientation'] = 'vertical'
+    elif layout_name == 'dagre':
+        layout_config['rankDir'] = 'TB'
+    # Add specific parameters for other layouts if needed, including 'cose' if defaults aren't sufficient
+    # elif layout_name == 'cose':
+    #     layout_config['idealEdgeLength'] = 100
+    #     layout_config['nodeRepulsion'] = 40000
+
+    return layout_config
+
 
 # Callback for hover: show large tooltip on node or edge mouseover
 @app.callback(
@@ -1422,6 +1411,7 @@ def update_cytoscape_causal_layout(layout_name):
     [Input('cytoscape-faro-network', 'mouseoverNodeData'),
      Input('cytoscape-faro-network', 'mouseoverEdgeData')]
 )
+
 def display_hover_data(node_data, edge_data):
     try:
         if node_data is not None:
@@ -1764,20 +1754,6 @@ def update_actor_view(view_option, network_click, table_cell, table_data):
             actor_details_children = dbc.Alert(f"Error loading actor details: {str(e)}", color="danger")
 
     return network_style, table_style, actor_details_children, subgraph_fig
-
-# Callback to reset causal layout
-@app.callback(
-    Output('cytoscape-causal-graph', 'layout'),
-    Input('reset-causal-layout', 'n_clicks'),
-    prevent_initial_call=True
-)
-def reset_causal_layout(n_clicks):
-    return {
-        'name': 'breadthfirst',
-        'roots': '[id = "Ukraine Drops EU Deal; Protests Begin (Euromaidan)"]',
-        'spacingFactor': 1.5,
-        'animate': False
-    }
 
 # ------------------------------------------------------------------------------
 # RUN THE APPLICATION
