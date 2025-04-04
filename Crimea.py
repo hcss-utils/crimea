@@ -1,17 +1,3 @@
-"""
-Crimea Annexation (2014) Interactive Dashboard - COMPLETE WORKING VERSION
-
-Complete, fully functional code that preserves all essential elements from the original working version
-while incorporating the beneficial modifications from the second version:
-- Full untruncated data lists
-- Tab 1: Cytoscape graph with node/edge type filters and full view options
-- Tab 2: Plotly timeline with add_shape fix and filterable DataTable
-- Tab 3: Plotly actor relationship graph with comprehensive error handling
-- Tab 4: Causal Cytoscape 'breadthfirst' graph for analysis
-- Comprehensive error handling throughout
-- All elements carefully preserved from the original working code
-"""
-
 import pandas as pd
 import numpy as np
 import json
@@ -79,8 +65,7 @@ def parse_date(date_str):
         print(f"Error during date parsing for: '{original_date_str}', Processed str: '{date_str}'. Error: {e}")
         # traceback.print_exc() # Uncomment for full traceback if needed
         return datetime(2014, 2, 27) # Default fallback
-
-
+    
 # ------------------------------------------------------------------------------
 # FULL DATA LISTS
 # ------------------------------------------------------------------------------
@@ -344,7 +329,7 @@ for _, individual in individuals_df.iterrows():
         "involvement": individual['involvement'],
         "color": node_types["Individual"]
     })
-
+    
 # Build causal edges (between events)
 causal_edges = []
 for _, link in causal_links_df.iterrows():
@@ -942,7 +927,7 @@ def create_actors_table():
             traceback.print_exc()
         # Return empty dataframe with correct columns
         return pd.DataFrame(columns=['Name', 'Type', 'Role/Description', 'Events Involved In'])
-        
+    
 # ------------------------------------------------------------------------------
 # DASH APP LAYOUT
 # ------------------------------------------------------------------------------
@@ -1109,7 +1094,9 @@ app.layout = dbc.Container([
                         html.Div(id='event-details', children="Click on an event in the timeline above to see details.")
                     ], style={'marginTop': '10px', 'padding': '15px', 'border': '1px solid #eee', 'minHeight': '100px'})
                 ], width=12)
-            ])
+            ]),
+            # Add hidden div for storing timeline table data
+            html.Div(id='timeline-table', style={'display': 'none'})
         ]),
         # TAB 3: Actors and Roles
         dbc.Tab(label="Actors and Roles", tab_id="tab-3", children=[
@@ -1163,9 +1150,11 @@ app.layout = dbc.Container([
                         ], style={'marginTop': '10px', 'padding': '15px', 'border': '1px solid #eee', 'minHeight': '100px'})
                     ])
                 ], width=12)
-            ])
-        ]),
-        # TAB 4: Analysis & Perspectives
+            ]),
+            # Add a hidden div for table loading feedback
+            html.Div(id='actor-table-loading-output', style={'display': 'none'})
+        ])
+# TAB 4: Analysis & Perspectives
         dbc.Tab(label="Analysis & Perspectives", tab_id="tab-4", children=[
             dbc.Tabs([
                 dbc.Tab(
@@ -1188,30 +1177,57 @@ app.layout = dbc.Container([
                                 ]),
                                 html.Div([
                                     html.H5("Key Turning Points Visualization"),
-                                    dcc.Graph(
-                                        id='causal-flow-chart',
-                                        figure=px.scatter(
-                                            events_df.iloc[[0, 2, 5, 9, 12, 13, 17, 19]],
-                                            x='date_parsed',
-                                            y='type',
-                                            text='title',
-                                            size=[20]*8,
-                                            color='type',
-                                            height=400,
-                                            labels={"date_parsed": "Timeline", "type": "Event Category"},
-                                            title="Critical Events in the Annexation Sequence"
-                                        ).update_traces(
-                                            mode='markers+text',
-                                            textposition='top center',
-                                            textfont_size=12
-                                        ).update_layout(
-                                            yaxis={'visible': True, 'title': 'Event Category'},
-                                            xaxis_title="Timeline",
-                                            showlegend=True,
-                                            legend_title_text='Category',
-                                            margin=dict(l=20, r=20, t=50, b=100)
-                                        )
-                                    )
+                                    dbc.Row([
+                                        dbc.Col([
+                                            html.Label("Select Layout:"),
+                                            dcc.Dropdown(
+                                                id='cytoscape-causal-layout-dropdown',
+                                                options=[
+                                                    {'label': 'Breadthfirst', 'value': 'breadthfirst'},
+                                                    {'label': 'Cose (Force Directed)', 'value': 'cose'},
+                                                    {'label': 'Grid', 'value': 'grid'},
+                                                    {'label': 'Circle', 'value': 'circle'},
+                                                    {'label': 'Dagre', 'value': 'dagre'}
+                                                ],
+                                                value='breadthfirst',
+                                                clearable=False),
+                                            dcc.Graph(
+                                                id='causal-flow-chart',
+                                                figure=px.scatter(
+                                                    events_df.iloc[[0, 2, 5, 9, 12, 13, 17, 19]],
+                                                    x='date_parsed',
+                                                    y='type',
+                                                    text='title',
+                                                    size=[20]*8,
+                                                    color='type',
+                                                    height=400,
+                                                    labels={"date_parsed": "Timeline", "type": "Event Category"},
+                                                    title="Critical Events in the Annexation Sequence"
+                                                ).update_traces(
+                                                    mode='markers+text',
+                                                    textposition='top center',
+                                                    textfont_size=12
+                                                ).update_layout(
+                                                    yaxis={'visible': True, 'title': 'Event Category'},
+                                                    xaxis_title="Timeline",
+                                                    showlegend=True,
+                                                    legend_title_text='Category',margin=dict(l=20, r=20, t=50, b=100)
+                                                )
+                                            )
+                                        ], width=12, md=6),
+                                        dbc.Col([
+                                            html.Button("Reset Layout", id="reset-causal-layout", n_clicks=0, className="btn btn-secondary", style={"marginTop": "28px"}),
+                                            dcc.Loading(id="loading-cytoscape-causal", type="default", children=[
+                                                cyto.Cytoscape(
+                                                    id='cytoscape-causal-graph',
+                                                    elements=create_cytoscape_elements('causal_only'),
+                                                    layout={'name': 'breadthfirst', 'roots': '[id = "Ukraine Drops EU Deal; Protests Begin (Euromaidan)"]', 'spacingFactor': 1.5, 'animate': False},
+                                                    style={'width': '100%', 'height': '500px', 'border': '1px solid #ddd'},
+                                                    stylesheet=default_stylesheet
+                                                )
+                                            ])
+                                        ], width=12, md=6)
+                                    ])
                                 ])
                             ], width=12)
                         ])
@@ -1376,6 +1392,30 @@ def update_cytoscape_layout(layout_name):
             print(f"Error updating layout: {e}")
         return {'name': 'grid'}, f"Error loading {layout_name} layout. Using grid instead."
 
+# Callback for causal graph layout
+@app.callback(
+    Output('cytoscape-causal-graph', 'layout'),
+    Input('cytoscape-causal-layout-dropdown', 'value'),
+    prevent_initial_call=True
+)
+def update_cytoscape_causal_layout(layout_name):
+    if debug_mode:
+        print(f"Updating causal layout to: {layout_name}")
+    
+    try:
+        layout_config = {'name': layout_name, 'animate': False}  # Disabled animation for better performance
+        if layout_name == 'cose':
+            layout_config['idealEdgeLength'] = 100
+            layout_config['nodeRepulsion'] = 400000
+        elif layout_name == 'dagre':
+            layout_config['rankDir'] = 'TB'
+        elif layout_name == 'breadthfirst':
+            layout_config['roots'] = '[id = "Ukraine Drops EU Deal; Protests Begin (Euromaidan)"]'
+            layout_config['spacingFactor'] = 1.5
+        return layout_config
+    except Exception as e:
+        return {'name': 'breadthfirst', 'roots': '[id = "Ukraine Drops EU Deal; Protests Begin (Euromaidan)"]', 'spacingFactor': 1.5, 'animate': False}
+
 # Callback for hover: show large tooltip on node or edge mouseover
 @app.callback(
     Output('cytoscape-hover-output', 'children'),
@@ -1418,15 +1458,12 @@ def display_hover_data(node_data, edge_data):
 # Callback to update Cytoscape elements based on node tap, reset button, and search input
 @app.callback(
     [Output('cytoscape-faro-network', 'elements'),
-     Output('cytoscape-tapNodeData-output', 'children'),
-     Output('debug-info', 'children')],
+     Output('cytoscape-tapNodeData-output', 'children')],
     [Input('cytoscape-faro-network', 'tapNodeData'),
      Input('reset-btn', 'n_clicks'),
-     Input('cytoscape-search-input', 'value'),
-     Input('node-type-checklist', 'value'),
-     Input('edge-type-checklist', 'value')]
+     Input('cytoscape-search-input', 'value')]
 )
-def filter_subgraph(tap_node, reset_clicks, search_value, node_type_filters, edge_type_filters):
+def filter_subgraph(tap_node, reset_clicks, search_value):
     """
     Updates Cytoscape elements based on interactions:
     - Node tap: Shows subgraph of tapped node and its neighbors.
@@ -1434,90 +1471,58 @@ def filter_subgraph(tap_node, reset_clicks, search_value, node_type_filters, edg
     - Search input: Filters the full graph based on the search text.
     """
     ctx = dash.callback_context
-    debug_info = "Callback triggered. "
 
     # Determine which input triggered the callback
     if not ctx.triggered:
         trigger_id = 'initial_load'
-        debug_info += "Initial load."
     else:
         trigger_id = ctx.triggered[0]['prop_id'].split('.')[0]
-        debug_info += f"Trigger ID: {trigger_id}."
 
     try:
         # Handle Reset Button Click
-        if trigger_id == "reset-btn" and reset_clicks > 0:
-            debug_info += f" Reset button clicked ({reset_clicks}). Search value: '{search_value}'."
-            # Reset shows full graph, filtered only by current search term and type filters
-            elements = create_cytoscape_elements('full', search_text=search_value or "", 
-                                             node_type_filters=node_type_filters, 
-                                             edge_type_filters=edge_type_filters)
-            tap_output_msg = "Graph reset."
-            if search_value:
-                 tap_output_msg += f" Showing search results for '{search_value}'."
-            else:
-                 tap_output_msg += " Click on a node to see its subgraph details."
-            return elements, tap_output_msg, debug_info
-
-        # Handle Search Input Change (including clearing the search)
-        if trigger_id == "cytoscape-search-input":
-            debug_info += f" Search input changed. Value: '{search_value}'."
-            # Filter full graph based on search
-            elements = create_cytoscape_elements('full', search_text=search_value or "", 
-                                             node_type_filters=node_type_filters, 
-                                             edge_type_filters=edge_type_filters)
-            tap_output_msg = f"Showing search results for '{search_value}'." if search_value else "Search cleared. Click on a node..."
-            return elements, tap_output_msg, debug_info
-            
-        # Handle Node Type or Edge Type filter changes
-        if trigger_id in ["node-type-checklist", "edge-type-checklist"]:
-            debug_info += f" Filter changed. Node types: {node_type_filters}, Edge types: {edge_type_filters}."
-            elements = create_cytoscape_elements('full', search_text=search_value or "", 
-                                             node_type_filters=node_type_filters, 
-                                             edge_type_filters=edge_type_filters)
-            tap_output_msg = "Graph filtered by node/edge types."
-            if search_value:
-                tap_output_msg += f" Also filtered by search: '{search_value}'."
-            return elements, tap_output_msg, debug_info
+        if trigger_id == 'reset-btn':
+            if debug_mode: print("Reset button clicked")
+            elements = create_cytoscape_elements('full', search_text=search_value or "")
+            tap_output_msg = "Graph has been reset. Click on a node to see its subgraph details."
+            return elements, tap_output_msg
 
         # Handle Node Tap
-        if trigger_id == "cytoscape-faro-network" and tap_node is not None:
+        elif trigger_id == 'cytoscape-faro-network' and tap_node:
+            if debug_mode: print(f"Node tapped: {tap_node.get('label', 'Unknown')}")
+            
+            # Get the node ID and label
             node_id = tap_node.get('id')
-            node_label = tap_node.get('label', node_id) # Use label for message
-            debug_info += f" Node tapped: {node_label}."
-
-            # Get neighbors from all_edges (1-hop neighborhood)
-            neighbors = {node_id} # Include the tapped node itself
-            neighbor_details_list = [] # For descriptive output message
-
+            node_label = tap_node.get('label', 'Unknown')
+            
+            if not node_id:
+                raise ValueError("Tapped node has no ID!")
+            
+            # Find all connected edges and neighbor nodes
+            neighbors = {node_id}  # Include the tapped node
+            neighbor_details_list = []
+            
+            # Find direct connections
             for edge in all_edges:
-                neighbor_node = None
-                relationship = edge.get('label', 'related to')
-                if edge['source'] == node_id and edge['target'] not in neighbors:
-                    neighbor_node = edge['target']
-                    neighbor_details_list.append(f"{neighbor_node} ({relationship})")
-                elif edge['target'] == node_id and edge['source'] not in neighbors:
-                    neighbor_node = edge['source']
-                    # Adjust relationship description if needed based on edge direction/type
-                    rev_relationship = relationship # Keep label simple for now
-                    neighbor_details_list.append(f"{neighbor_node} ({rev_relationship})")
-
-                if neighbor_node:
-                    neighbors.add(neighbor_node)
-
+                if edge['source'] == node_id:
+                    neighbors.add(edge['target'])
+                    # Get target node's info for display
+                    target_nodes = [n for n in all_nodes if n['id'] == edge['target']]
+                    if target_nodes:
+                        target_type = target_nodes[0].get('type', 'Unknown')
+                        target_label = target_nodes[0].get('label', edge['target'])
+                        neighbor_details_list.append(f"{target_label} ({target_type}) - {edge.get('label', 'connected to')}")
+                elif edge['target'] == node_id:
+                    neighbors.add(edge['source'])
+                    # Get source node's info for display
+                    source_nodes = [n for n in all_nodes if n['id'] == edge['source']]
+                    if source_nodes:
+                        source_type = source_nodes[0].get('type', 'Unknown')
+                        source_label = source_nodes[0].get('label', edge['source'])
+                        neighbor_details_list.append(f"{source_label} ({source_type}) - {edge.get('label', 'connected to')}")
+            
             # Build subgraph elements
             sub_nodes_data = [n for n in all_nodes if n['id'] in neighbors]
             sub_edges_data = [e for e in all_edges if e['source'] in neighbors and e['target'] in neighbors]
-
-            # Filter sub nodes based on current node type filters
-            if node_type_filters:
-                sub_nodes_data = [n for n in sub_nodes_data if n['type'] in node_type_filters]
-                node_ids = {n['id'] for n in sub_nodes_data}
-                sub_edges_data = [e for e in sub_edges_data if e['source'] in node_ids and e['target'] in node_ids]
-            
-            # Filter sub edges based on current edge type filters
-            if edge_type_filters:
-                sub_edges_data = [e for e in sub_edges_data if e['type'] in edge_type_filters]
 
             # Convert to Cytoscape format
             new_elements = []
@@ -1544,30 +1549,32 @@ def filter_subgraph(tap_node, reset_clicks, search_value, node_type_filters, edg
                 tap_output_msg_content.append(html.P("No direct connections found in the dataset."))
             tap_output_msg = dbc.Alert(tap_output_msg_content, color="info", style={'maxHeight': '300px', 'overflowY': 'auto'})
 
-            return new_elements, tap_output_msg, debug_info
+            return new_elements, tap_output_msg
+
+        # Handle Search Input
+        elif trigger_id == 'cytoscape-search-input' and search_value:
+            if debug_mode: print(f"Search input: '{search_value}'")
+            elements = create_cytoscape_elements('full', search_text=search_value)
+            tap_output_msg = dbc.Alert(f"Showing search results for '{search_value}'", color="success") if elements else dbc.Alert("No nodes match your search criteria.", color="warning")
+            return elements, tap_output_msg
 
         # Default: If no specific action matched or search is empty, show full graph
-        debug_info += " Default action: showing full graph."
-        elements = create_cytoscape_elements('full', search_text=search_value or "", 
-                                         node_type_filters=node_type_filters, 
-                                         edge_type_filters=edge_type_filters)
+        elements = create_cytoscape_elements('full', search_text=search_value or "")
         tap_output_msg = f"Showing search results for '{search_value}'." if search_value else "Click on a node to see its subgraph details."
-        return elements, tap_output_msg, debug_info
+        return elements, tap_output_msg
 
     except Exception as e:
         error_message = f"Error in filter_subgraph callback: {e}"
         print(error_message)
         traceback.print_exc()
         # Return the full graph and an error message
-        return create_cytoscape_elements('full'), dbc.Alert(error_message, color="danger"), debug_info
-
-
+        return create_cytoscape_elements('full'), dbc.Alert(error_message, color="danger")
+        
 # Timeline Update Callback (Outputs Graph and Table Data)
 @app.callback(
     [Output('timeline-graph', 'figure'),
      Output('event-details', 'children'),
-     Output('timeline-table', 'data'), 
-     Output('timeline-loading-output', 'children')],
+     Output('timeline-table', 'data')],
     [Input('event-type-dropdown', 'value'),
      Input('date-range-picker', 'start_date'),
      Input('date-range-picker', 'end_date'),
@@ -1623,16 +1630,16 @@ def update_timeline(selected_types, start_date_str, end_date_str, click_data, ta
             ])
         except Exception as e:
             print(f"Error extracting event details: {e}")
+            event_details_children = dbc.Alert(f"Error loading event details: {str(e)}", color="danger")
 
-    return fig, event_details_children, table_data, f"{len(filtered_df)} events shown"
+    return fig, event_details_children, table_data
 
 # Callback for Actor Tab View Toggle and Details
 @app.callback(
     [Output('actor-network-container', 'style'),
      Output('actor-table-container', 'style'),
      Output('actor-details', 'children'),
-     Output('actor-network-graph', 'figure'),
-     Output('actor-table-loading-output', 'children')],
+     Output('actor-network-graph', 'figure')],
     [Input('actor-view-toggle', 'value'),
      Input('actor-network-graph', 'clickData'),
      Input('actors-table', 'active_cell')],
@@ -1643,8 +1650,7 @@ def update_actor_view(view_option, network_click, table_cell, table_data):
     table_style = {'display': 'block'} if view_option == 'table' else {'display': 'none'}
     actor_details_children = "Select an actor from the network or table above."
     actor_name = None
-    table_loading_msg = ""
-
+    
     ctx = dash.callback_context
     triggered_id = ctx.triggered[0]['prop_id'].split('.')[0] if ctx.triggered else None
 
@@ -1660,97 +1666,106 @@ def update_actor_view(view_option, network_click, table_cell, table_data):
     # Build filtered subgraph if actor clicked
     subgraph_fig = create_actor_relationships()
     if view_option == 'network' and actor_name:
-        related_events = set()
-        connected_nodes = {actor_name}
-
-        # Find events this actor participated in
-        for edge in actor_event_edges + individual_event_edges:
-            if edge['source'] == actor_name:
-                related_events.add(edge['target'])
-
-        # Find other actors who also participated in those events
-        for edge in actor_event_edges + individual_event_edges:
-            if edge['target'] in related_events:
-                connected_nodes.add(edge['source'])
-
-        # Prepare subgraph using NetworkX
-        G = nx.Graph()
-        for node in all_nodes:
-            if node['id'] in connected_nodes or node['id'] in related_events:
-                G.add_node(node['id'], type=node['type'], color=node.get('color', '#ccc'), size=20)
-
-        for edge in all_edges:
-            if edge['source'] in G.nodes and edge['target'] in G.nodes:
-                G.add_edge(edge['source'], edge['target'])
-
         try:
-            pos = nx.spring_layout(G, k=0.5)
-        except:
-            pos = nx.random_layout(G)
+            related_events = set()
+            connected_nodes = {actor_name}
 
-        edge_x, edge_y = [], []
-        for e in G.edges():
-            x0, y0 = pos[e[0]]
-            x1, y1 = pos[e[1]]
-            edge_x.extend([x0, x1, None])
-            edge_y.extend([y0, y1, None])
+            # Find events this actor participated in
+            for edge in actor_event_edges + individual_event_edges:
+                if edge['source'] == actor_name:
+                    related_events.add(edge['target'])
 
-        node_x, node_y, node_text, node_color, node_size = [], [], [], [], []
-        for n in G.nodes(data=True):
-            node_id = n[0]
-            node_x.append(pos[node_id][0])
-            node_y.append(pos[node_id][1])
-            node_text.append(node_id)
-            node_color.append(n[1].get('color', '#888'))
-            node_size.append(n[1].get('size', 20))
+            # Find other actors who also participated in those events
+            for edge in actor_event_edges + individual_event_edges:
+                if edge['target'] in related_events:
+                    connected_nodes.add(edge['source'])
 
-        edge_trace = go.Scatter(x=edge_x, y=edge_y, mode='lines', line=dict(width=1, color='#ccc'), hoverinfo='none')
-        node_trace = go.Scatter(x=node_x, y=node_y, mode='markers+text', text=node_text, textposition='top center',
-                                marker=dict(size=node_size, color=node_color, line=dict(width=1, color='black')),
-                                hovertext=node_text, hoverinfo='text')
-        subgraph_fig = go.Figure(data=[edge_trace, node_trace])
-        subgraph_fig.update_layout(
-            title=f"Connections of {actor_name}",
-            showlegend=False, hovermode='closest',
-            margin=dict(b=20, l=5, r=5, t=40),
-            xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-            yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-            height=700
-        )
+            # Prepare subgraph using NetworkX
+            G = nx.Graph()
+            for node in all_nodes:
+                if node['id'] in connected_nodes or node['id'] in related_events:
+                    G.add_node(node['id'], type=node['type'], color=node.get('color', '#ccc'), size=20)
+
+            for edge in all_edges:
+                if edge['source'] in G.nodes and edge['target'] in G.nodes:
+                    G.add_edge(edge['source'], edge['target'])
+
+            try:
+                pos = nx.spring_layout(G, k=0.5, iterations=50)
+            except:
+                pos = nx.random_layout(G)
+
+            edge_x, edge_y = [], []
+            for e in G.edges():
+                x0, y0 = pos[e[0]]
+                x1, y1 = pos[e[1]]
+                edge_x.extend([x0, x1, None])
+                edge_y.extend([y0, y1, None])
+
+            node_x, node_y, node_text, node_color, node_size = [], [], [], [], []
+            for n in G.nodes(data=True):
+                node_id = n[0]
+                node_x.append(pos[node_id][0])
+                node_y.append(pos[node_id][1])
+                node_text.append(node_id)
+                node_color.append(n[1].get('color', '#888'))
+                node_size.append(n[1].get('size', 20))
+
+            edge_trace = go.Scatter(x=edge_x, y=edge_y, mode='lines', line=dict(width=1, color='#ccc'), hoverinfo='none')
+            node_trace = go.Scatter(x=node_x, y=node_y, mode='markers+text', text=node_text, textposition='top center',
+                                    marker=dict(size=node_size, color=node_color, line=dict(width=1, color='black')),
+                                    hovertext=node_text, hoverinfo='text')
+            subgraph_fig = go.Figure(data=[edge_trace, node_trace])
+            subgraph_fig.update_layout(
+                title=f"Connections of {actor_name}",
+                showlegend=False, hovermode='closest',
+                margin=dict(b=20, l=5, r=5, t=40),
+                xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+                yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+                height=700
+            )
+        except Exception as e:
+            print(f"Error creating actor subgraph: {e}")
+            traceback.print_exc()
 
     # Prepare actor detail card
     if actor_name:
-        match_ind = individuals_df[individuals_df['name'] == actor_name]
-        match_act = actors_df[actors_df['name'] == actor_name]
-        if not match_ind.empty:
-            ind = match_ind.iloc[0]
-            events = ind['events']
-            actor_details_children = dbc.Card([
-                dbc.CardHeader(html.H5(ind['name'])),
-                dbc.CardBody([
-                    html.P([html.Strong("Type: "), f"Individual ({ind['role']})"]),
-                    html.P([html.Strong("Involvement: "), ind['description']]),
-                    html.H6("Events:", style={'marginTop': '10px'}),
-                    html.Ul([html.Li(e) for e in events])
+        try:
+            match_ind = individuals_df[individuals_df['name'] == actor_name]
+            match_act = actors_df[actors_df['name'] == actor_name]
+            if not match_ind.empty:
+                ind = match_ind.iloc[0]
+                events = ind['events']
+                actor_details_children = dbc.Card([
+                    dbc.CardHeader(html.H5(ind['name'])),
+                    dbc.CardBody([
+                        html.P([html.Strong("Type: "), f"Individual ({ind['role']})"]),
+                        html.P([html.Strong("Involvement: "), ind['description']]),
+                        html.H6("Events:", style={'marginTop': '10px'}),
+                        html.Ul([html.Li(e) for e in events])
+                    ])
                 ])
-            ])
-        elif not match_act.empty:
-            act = match_act.iloc[0]
-            events = act['events']
-            actor_details_children = dbc.Card([
-                dbc.CardHeader(html.H5(act['name'])),
-                dbc.CardBody([
-                    html.P([html.Strong("Type: "), act['type']]),
-                    html.P([html.Strong("Role: "), act['role']]),
-                    html.H6("Events:", style={'marginTop': '10px'}),
-                    html.Ul([html.Li(e) for e in events])
+            elif not match_act.empty:
+                act = match_act.iloc[0]
+                events = act['events']
+                actor_details_children = dbc.Card([
+                    dbc.CardHeader(html.H5(act['name'])),
+                    dbc.CardBody([
+                        html.P([html.Strong("Type: "), act['type']]),
+                        html.P([html.Strong("Role: "), act['role']]),
+                        html.H6("Events:", style={'marginTop': '10px'}),
+                        html.Ul([html.Li(e) for e in events])
+                    ])
                 ])
-            ])
-        else:
-            actor_details_children = dbc.Alert(f"No details found for {actor_name}", color="warning")
+            else:
+                actor_details_children = dbc.Alert(f"No details found for {actor_name}", color="warning")
+        except Exception as e:
+            print(f"Error creating actor details: {e}")
+            actor_details_children = dbc.Alert(f"Error loading actor details: {str(e)}", color="danger")
 
-    return network_style, table_style, actor_details_children, subgraph_fig, table_loading_msg
+    return network_style, table_style, actor_details_children, subgraph_fig
 
+# Callback to reset causal layout
 @app.callback(
     Output('cytoscape-causal-graph', 'layout'),
     Input('reset-causal-layout', 'n_clicks'),
